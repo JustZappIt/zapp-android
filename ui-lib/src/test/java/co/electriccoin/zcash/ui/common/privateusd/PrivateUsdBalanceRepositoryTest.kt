@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
 import co.electriccoin.zcash.ui.common.repository.RailgunSync
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletState
+import co.electriccoin.zcash.ui.screen.privateusd.receivedSend
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -34,6 +35,7 @@ import xyz.justzappit.railgun.RailgunEvent
 import xyz.justzappit.railgun.RailgunException
 import xyz.justzappit.railgun.RailgunMerkletree
 import xyz.justzappit.railgun.RailgunNetwork
+import xyz.justzappit.railgun.RailgunReceivedSend
 import xyz.justzappit.railgun.RailgunScanStatus
 import xyz.justzappit.railgun.RailgunTokenAmount
 import java.math.BigDecimal
@@ -161,6 +163,63 @@ class PrivateUsdBalanceRepositoryTest {
             assertEquals(0, BigDecimal.ONE.compareTo(checkNotNull(repository.state.value.balances).available))
             assertTrue(checkNotNull(preferences.getString(CACHE_KEY)).contains(WALLET.value))
         }
+
+    @Test
+    fun `the sends received are the dollars' only, never cached, and a sync that can't read them keeps the last`() =
+        runTest {
+            val repository = repository()
+            runCurrent()
+            val dollars = receivedSend(at = 1_790_000_000)
+            val ether = dollars.copy(token = Sepolia.WETH)
+
+            showSync(received = listOf(dollars, ether))
+            assertEquals(listOf(dollars), repository.received.map { it.send })
+            assertFalse(checkNotNull(preferences.getString(CACHE_KEY)).contains(dollars.txid.hex.drop(2)))
+
+            showSync(received = null)
+            assertEquals(listOf(dollars), repository.received.map { it.send })
+
+            walletChanges.emit(Unit)
+            runCurrent()
+            assertTrue(repository.received.isEmpty())
+        }
+
+    @Test
+    fun `a send received with no block time keeps the time of the sync that first listed it`() =
+        runTest {
+            val repository = repository()
+            runCurrent()
+            val undated = receivedSend(at = 1).copy(blockTime = null)
+            val firstListed = now()
+
+            showSync(received = listOf(undated))
+            advanceTimeBy(5.minutes)
+            showSync(received = listOf(undated, receivedSend(at = 2)))
+
+            assertEquals(listOf(firstListed, Instant.fromEpochSeconds(2)), repository.received.map { it.at })
+        }
+
+    @Test
+    fun `every send received has a key of its own, even two alike in one transaction, and none moves no money`() {
+        val send = receivedSend(at = 1)
+        val listed =
+            receivedDollars(
+                RailgunNetwork.SEPOLIA,
+                listOf(send, send, send.copy(amount = BigInteger.TWO), send.copy(amount = BigInteger.ZERO)),
+                shown = emptyList(),
+                now = Instant.fromEpochSeconds(0),
+            )
+
+        assertEquals(3, listed.size)
+        assertEquals(3, listed.map { it.key }.toSet().size)
+    }
+
+    private fun TestScope.showSync(received: List<RailgunReceivedSend>?) {
+        railgunState.update { it.copy(sync = RailgunSync(WALLET, balances(ONE_DOLLAR), now(), received)) }
+        runCurrent()
+    }
+
+    private val PrivateUsdBalanceRepository.received get() = state.value.received
 
     @Test
     fun `after a failure, refreshes on their own wait, and one asked for does not`() =

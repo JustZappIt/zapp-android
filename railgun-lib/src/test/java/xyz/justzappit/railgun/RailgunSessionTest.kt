@@ -10,10 +10,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.evm.util.toHex
 import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.time.Instant
 
 class RailgunSessionTest {
     private val page = FakePage()
@@ -24,8 +28,8 @@ class RailgunSessionTest {
     fun balancesKeepKnownBucketsOnly() =
         runTest {
             page.reply =
-                """{"Spendable":[{"token":"$TOKEN","amount":"123456789012345678901234567890"}],""" +
-                """"ShieldPending":[],"SomeNewBucket":[{"token":"$TOKEN","amount":"1"}]}"""
+                """{"balances":{"Spendable":[{"token":"$TOKEN","amount":"123456789012345678901234567890"}],""" +
+                """"ShieldPending":[],"SomeNewBucket":[{"token":"$TOKEN","amount":"1"}]},"received":[]}"""
 
             assertEquals(
                 RailgunBalances(
@@ -35,9 +39,113 @@ class RailgunSessionTest {
                         RailgunBalanceBucket.SHIELD_PENDING to emptyList(),
                     )
                 ),
-                session.refresh(),
+                session.refresh().balances,
             )
             assertEquals(RailgunMethod.REFRESH, page.method)
+        }
+
+    @Test
+    fun theSendsReceivedComeWithTheBalancesAndOneItCannotReadIsLeftOut() =
+        runTest {
+            page.reply =
+                """{"balances":{},"received":[""" +
+                """{"txid":"$TXID","timestamp":1790000000,"token":"$TOKEN","amount":"5000000",""" +
+                """"bucket":"Spendable","sender":"$ZERO_K"},""" +
+                """{"txid":"$TXID","timestamp":null,"token":"$TOKEN","amount":"1","bucket":"SomeNewBucket",""" +
+                """"sender":"0zk1notanaddress"},""" +
+                """{"txid":"$TXID","timestamp":1790000000,"token":"$TOKEN","amount":"1.5","bucket":"Spendable"},""" +
+                """{"txid":"0x1234","token":"$TOKEN","amount":"1"}]}"""
+
+            assertEquals(
+                listOf(
+                    RailgunReceivedSend(
+                        txid = TxHash.fromHex(TXID),
+                        token = TOKEN_ADDRESS,
+                        amount = BigInteger.valueOf(5_000_000),
+                        bucket = RailgunBalanceBucket.SPENDABLE,
+                        blockTime = Instant.fromEpochSeconds(1_790_000_000),
+                        sender = ZERO_K_ADDRESS,
+                    ),
+                    RailgunReceivedSend(TxHash.fromHex(TXID), TOKEN_ADDRESS, ONE, null, null, null),
+                ),
+                session.refresh().received,
+            )
+        }
+
+    @Test
+    fun aHistoryThePageCouldNotReadIsNullAndTheBalancesStand() =
+        runTest {
+            for (received in listOf(""","received":null""", "", ""","received":{"txid":"$TXID"}""")) {
+                page.reply = """{"balances":{"Spendable":[{"token":"$TOKEN","amount":"1"}]}$received}"""
+
+                val refreshed = session.refresh()
+
+                assertNull(refreshed.received, received)
+                assertEquals(1, refreshed.balances.byBucket.size)
+            }
+        }
+
+    @Test
+    fun aSendReceivedIsSettledOnceSpendableOrSpent() {
+        val send = RailgunReceivedSend(TxHash.fromHex(TXID), TOKEN_ADDRESS, ONE, null, null, null)
+
+        assertEquals(
+            listOf(true, true, false, false, false),
+            listOf(
+                RailgunBalanceBucket.SPENDABLE,
+                RailgunBalanceBucket.SPENT,
+                RailgunBalanceBucket.MISSING_EXTERNAL_POI,
+                RailgunBalanceBucket.SHIELD_PENDING,
+                null,
+            ).map { send.copy(bucket = it).isSettled },
+        )
+    }
+
+    @Test
+    fun aDepositNoteIsItsFiveWordsInTheContractsOrderForThisWallet() =
+        runTest {
+            page.reply = depositNote()
+
+            val note = session.depositNote()
+
+            assertEquals(RailgunMethod.DEPOSIT_NOTE, page.method)
+            assertEquals(ZERO_K_ADDRESS, note.receiver)
+            assertEquals(WORDS[0], note.npk.word())
+            assertEquals(WORDS.subList(1, 4), note.encryptedBundle.map { it.word() })
+            assertEquals(WORDS[4], note.shieldKey.word())
+            assertEquals(note, session.depositNote())
+            assertEquals("RailgunDepositNote", note.toString())
+        }
+
+    @Test
+    fun aDepositNoteGivesOutCopiesOfItsWords() =
+        runTest {
+            page.reply = depositNote()
+            val note = session.depositNote()
+
+            note.npk.fill(0)
+            note.encryptedBundle.forEach { it.fill(0) }
+            note.shieldKey.fill(0)
+
+            val words = listOf(note.npk) + note.encryptedBundle + listOf(note.shieldKey)
+            assertEquals(WORDS, words.map { it.word() })
+        }
+
+    @Test
+    fun aDepositNoteThatIsNotFiveWordsIsAProtocolFailure() =
+        runTest {
+            val notes =
+                listOf(
+                    depositNote(bundle = WORDS.subList(1, 3)),
+                    depositNote(bundle = WORDS.subList(1, 5)),
+                    depositNote(npk = "0x" + "11".repeat(31)),
+                    depositNote(shieldKey = "0x" + "zz".repeat(32)),
+                    """{"npk":"${WORDS[0]}","encryptedBundle":["${WORDS[1]}","${WORDS[2]}","${WORDS[3]}"]}""",
+                )
+            for (reply in notes) {
+                page.reply = reply
+                assertFailsWith<RailgunException.Protocol>(reply) { session.depositNote() }
+            }
         }
 
     @Test
@@ -106,6 +214,14 @@ class RailgunSessionTest {
         spends: String = """[{"tree":0,"nullifiers":["$NULLIFIER"]}]""",
     ) = """{"chainId":$chainId,"to":"$to","data":"$DATA","value":"$value","spends":$spends,"proofMs":1200}"""
 
+    private fun depositNote(
+        npk: String = WORDS[0],
+        bundle: List<String> = WORDS.subList(1, 4),
+        shieldKey: String = WORDS[4],
+    ) = """{"npk":"$npk","encryptedBundle":[${bundle.joinToString(",") { "\"$it\"" }}],"shieldKey":"$shieldKey"}"""
+
+    private fun ByteArray.word() = "0x" + toHex()
+
     private class FakePage : RailgunPage {
         var reply = "null"
         var method: RailgunMethod? = null
@@ -148,6 +264,10 @@ class RailgunSessionTest {
         val PROXY_ADDRESS = Address.parse(PROXY)
         const val DATA = "0xd8ae136a00"
         val NULLIFIER = "0x" + "ab".repeat(32)
+        val TXID = "0x" + "cd".repeat(32)
+
+        // npk, the three encryptedBundle words and shieldKey, as zecSwap's known answers write a note: 0x22… to 0x66….
+        val WORDS = listOf("22", "33", "44", "55", "66").map { "0x" + it.repeat(32) }
         val BROADCASTER =
             RailgunBroadcaster(
                 chainId = CHAIN_ID,

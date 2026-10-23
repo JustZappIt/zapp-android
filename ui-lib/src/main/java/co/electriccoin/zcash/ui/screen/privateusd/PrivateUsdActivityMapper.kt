@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdActivityData
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdReceived
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
@@ -27,6 +28,16 @@ import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapResult
 import xyz.justzappit.offramp.atomicswap.ReverseSwapStatus
 import java.math.BigInteger
+
+/** This activity with the private sends [received] among it, newest first. */
+internal fun List<PrivateUsdActivityData>.withReceived(
+    received: List<PrivateUsdReceived>
+): List<PrivateUsdActivityData> =
+    if (received.isEmpty()) {
+        this
+    } else {
+        (this + received.map(PrivateUsdActivityData::Received)).sortedByDescending { it.timestamp }
+    }
 
 /** What moved no money isn't a row. */
 class PrivateUsdActivityMapper {
@@ -87,6 +98,52 @@ class PrivateUsdActivityMapper {
                     onClick = null,
                 )
             }
+
+            is PrivateUsdActivityData.Received -> {
+                received(data.received, date, deployment, currency, onOpenUrl)
+            }
+        }
+    }
+
+    // In once Railgun's screening clears it; until then it can't be spent, and says so with a spinner.
+    private fun received(
+        received: PrivateUsdReceived,
+        date: StringResource,
+        deployment: AtomicSwapDeployment,
+        currency: LocalCurrency,
+        onOpenUrl: (String) -> Unit,
+    ): PrivateUsdActivityState? {
+        val send = received.send
+        val sender = send.sender
+        val status =
+            when {
+                !send.isSettled -> {
+                    stringRes(R.string.private_usd_activity_received_screening)
+                }
+
+                sender == null -> {
+                    stringRes(R.string.private_usd_activity_sender_hidden)
+                }
+
+                else -> {
+                    stringRes(
+                        R.string.private_usd_activity_from,
+                        sender.value.ellipsizeAddress(ADDRESS_HEAD, ADDRESS_TAIL),
+                    )
+                }
+            }
+        return moved(received.token, send.amount)?.let { got ->
+            PrivateUsdActivityState(
+                key = received.key,
+                title = stringRes(R.string.private_usd_activity_received),
+                detail = joinDetail(date, status),
+                amount = got.signed(R.string.private_usd_activity_in),
+                local = got.local(currency),
+                tone = if (send.isSettled) PrivateUsdActivityTone.IN else PrivateUsdActivityTone.NEUTRAL,
+                onClick = { onOpenUrl(deployment.explorerTxUrl + send.txid.hex) },
+                onClickLabel = stringRes(R.string.private_usd_activity_open_transaction),
+                isPending = !send.isSettled,
+            )
         }
     }
 

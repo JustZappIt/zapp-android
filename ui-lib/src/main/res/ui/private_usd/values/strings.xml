@@ -116,6 +116,10 @@
     <string name="private_usd_activity_unconfirmed" tools:ignore="MissingTranslation">not in a block yet</string>
     <string name="private_usd_activity_open_conversion" tools:ignore="MissingTranslation">Open conversion</string>
     <string name="private_usd_activity_open_transaction" tools:ignore="MissingTranslation">View transaction</string>
+    <string name="private_usd_activity_received">Received privately</string>
+    <string name="private_usd_activity_from">from %1$s</string>
+    <string name="private_usd_activity_sender_hidden">sender hidden</string>
+    <string name="private_usd_activity_received_screening">available once screened</string>
 
     <!-- Convert: amount -->
     <string name="convert_title">Convert</string>

@@ -39,6 +39,13 @@ sealed interface PrivateUsdActivityData {
     ) : PrivateUsdActivityData {
         override val timestamp = Instant.fromEpochSeconds(send.startedAt)
     }
+
+    /** A private send another wallet made to this one, which the balance's syncs find; not made on this device. */
+    data class Received(
+        val received: PrivateUsdReceived
+    ) : PrivateUsdActivityData {
+        override val timestamp = received.at
+    }
 }
 
 /** Every conversion, send and withdrawal made on this device, newest first. */

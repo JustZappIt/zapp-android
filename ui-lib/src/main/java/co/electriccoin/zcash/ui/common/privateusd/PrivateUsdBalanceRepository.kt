@@ -35,6 +35,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunNetwork
+import xyz.justzappit.railgun.RailgunReceivedSend
 import xyz.justzappit.railgun.RailgunScanStatus
 import xyz.justzappit.railgun.RailgunTokenAmount
 import java.math.BigDecimal
@@ -132,10 +133,45 @@ data class PrivateUsdBalanceState(
     val refreshFailed: Boolean = false,
     /** How far the wallet's first sync has come, while there's nothing to show yet. */
     val firstSyncPercent: Int? = null,
+    /** The private sends the wallet received, as the last sync that could read them found them. Never cached. */
+    val received: List<PrivateUsdReceived> = emptyList(),
 ) {
     /** What of [token] can be spent now: none once synced without it, null until known. */
     fun available(token: PrivateUsdToken): BigInteger? =
         balances?.let { known -> known.assets.firstOrNull { it.token == token }?.available ?: BigInteger.ZERO }
+}
+
+/** A private send another Railgun wallet made to this one, in one of the deployment's dollar tokens. */
+data class PrivateUsdReceived(
+    val send: RailgunReceivedSend,
+    val token: PrivateUsdToken,
+    /** When its block was made, else when the first sync that listed it ran. */
+    val at: Instant,
+    /** Tells it from every other send listed with it, even one of the same amount in the same transaction. */
+    val key: String,
+)
+
+/**
+ * [sends] in the deployment's dollar tokens, each dated by its block where the engine knows it, else by when a sync
+ * first listed it: as [shown] has it if one did before, else [now].
+ */
+internal fun receivedDollars(
+    network: RailgunNetwork,
+    sends: List<RailgunReceivedSend>,
+    shown: List<PrivateUsdReceived>,
+    now: Instant,
+): List<PrivateUsdReceived> {
+    val firstListed = shown.associate { it.key to it.at }
+    val repeats = mutableMapOf<String, Int>()
+    return sends
+        .filter { it.amount.signum() > 0 }
+        .mapNotNull { send -> PrivateUsdTokens.find(network, send.token)?.takeIf { it.isDollar }?.let { send to it } }
+        .map { (send, token) ->
+            val same = "received-${send.txid.hex}-${send.token.lowercaseHex}-${send.amount}"
+            val repeat = repeats.getOrDefault(same, 0).also { repeats[same] = it + 1 }
+            val key = if (repeat == 0) same else "$same-$repeat"
+            PrivateUsdReceived(send, token, send.blockTime ?: firstListed[key] ?: now, key)
+        }
 }
 
 /** The Railgun balance as private USD. A wallet's first sync reads all of Railgun's history, so the last is cached. */
@@ -288,7 +324,12 @@ class PrivateUsdBalanceRepositoryImpl(
             val cached = address?.let { cache.read(it, network) }
             wallet = address
             mutableState.update {
-                it.copy(balances = cached?.balances, updatedAt = cached?.updatedAt, refreshFailed = false)
+                it.copy(
+                    balances = cached?.balances,
+                    updatedAt = cached?.updatedAt,
+                    refreshFailed = false,
+                    received = emptyList(),
+                )
             }
         }
 
@@ -301,7 +342,16 @@ class PrivateUsdBalanceRepositoryImpl(
         shown = sync
         cache.write(sync)
         val balances = PrivateUsdBalances.of(network, sync.balances.byBucket)
-        mutableState.update { it.copy(balances = balances, updatedAt = sync.at, refreshFailed = false) }
+        mutableState.update { state ->
+            val received = sync.received?.let { receivedDollars(network, it, state.received, sync.at) }
+            state.copy(
+                balances = balances,
+                updatedAt = sync.at,
+                refreshFailed = false,
+                // A sync that couldn't read the wallet's history keeps the last list.
+                received = received ?: state.received,
+            )
+        }
     }
 
     private companion object {

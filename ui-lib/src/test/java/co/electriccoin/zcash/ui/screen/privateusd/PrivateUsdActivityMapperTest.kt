@@ -12,8 +12,11 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdActivityData
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdPendingSend
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRecord
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
+import co.electriccoin.zcash.ui.common.privateusd.Sepolia
 import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
+import co.electriccoin.zcash.ui.design.component.zapp.ellipsizeAddress
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -26,7 +29,9 @@ import xyz.justzappit.offramp.atomicswap.RefundCause
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ZcashTxId
 import xyz.justzappit.railgun.RailgunAddress
+import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunDestination
+import xyz.justzappit.railgun.RailgunNetwork
 import java.math.BigDecimal
 import java.math.BigInteger
 import kotlin.test.Test
@@ -164,6 +169,60 @@ class PrivateUsdActivityMapperTest {
             )
 
         assertEquals(emptyList(), rows)
+    }
+
+    @Test
+    fun `a send received reads in, names its sender where it showed itself, and opens its transaction`() {
+        val named = receivedSend(at = 10, sender = SENDER)
+        val rows =
+            rows(
+                PrivateUsdActivityData.Received(received(named)),
+                PrivateUsdActivityData.Received(received(receivedSend(at = 20))),
+            )
+
+        rows.first().onClick?.invoke()
+
+        val got = tokenAmount(named.amount, checkNotNull(PrivateUsdTokens.find(RailgunNetwork.SEPOLIA, Sepolia.USDC)))
+        assertEquals(stringRes(R.string.private_usd_activity_in, got).asPrivacySensitive(), rows.first().amount)
+        assertEquals(listOf(stringRes(R.string.private_usd_activity_received)), rows.map { it.title }.distinct())
+        assertEquals(
+            listOf(
+                stringRes(R.string.private_usd_activity_from, SENDER.value.ellipsizeAddress(8, 4)),
+                stringRes(R.string.private_usd_activity_sender_hidden),
+            ),
+            rows.map { (it.detail as StringResource.ByResource).args[1] },
+        )
+        assertEquals(listOf(PrivateUsdActivityTone.IN), rows.map { it.tone }.distinct())
+        assertEquals(listOf(false), rows.map { it.isPending }.distinct())
+        assertEquals(listOf<Any>(AtomicSwapTestnet.deployment.explorerTxUrl + named.txid.hex), opened)
+    }
+
+    @Test
+    fun `a send received still in screening says it can't be spent yet, with a spinner, sender or not`() {
+        val screening = receivedSend(at = 10, bucket = RailgunBalanceBucket.MISSING_EXTERNAL_POI, sender = SENDER)
+        val row = rows(PrivateUsdActivityData.Received(received(screening))).single()
+
+        assertEquals(
+            stringRes(R.string.private_usd_activity_received_screening),
+            (row.detail as StringResource.ByResource).args[1],
+        )
+        assertTrue(row.isPending)
+        assertEquals(PrivateUsdActivityTone.NEUTRAL, row.tone)
+        assertNotNull(row.onClick)
+    }
+
+    @Test
+    fun `sends received join the activity newest first`() {
+        val toUsd = PrivateUsdActivityData.ToUsd(toUsd(index = 0, at = 10, AtomicSwapOutcome.Paid))
+        val sent = PrivateUsdActivityData.Sent(send(at = 30))
+        val received = received(receivedSend(at = 20))
+        val activity = listOf(sent, toUsd)
+
+        assertEquals(
+            listOf(sent, PrivateUsdActivityData.Received(received), toUsd),
+            activity.withReceived(listOf(received)),
+        )
+        assertEquals(activity, activity.withReceived(emptyList()))
     }
 
     private fun rows(

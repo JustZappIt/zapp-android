@@ -72,4 +72,6 @@ internal data class PrivateUsdActivityState(
     val onClick: (() -> Unit)?,
     /** What [onClick] does, read aloud. */
     val onClickLabel: StringResource? = null,
+    /** Still on its way, as money Railgun's screening hasn't cleared yet: a spinner shows beside [detail]. */
+    val isPending: Boolean = false,
 )

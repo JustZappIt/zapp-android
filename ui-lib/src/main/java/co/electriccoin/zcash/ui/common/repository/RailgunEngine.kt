@@ -56,6 +56,20 @@ internal class RailgunEngine(
             }.await()
 
     /**
+     * [withSession] for a call the page answers at once, whatever else it runs: on a page another use holds open, it
+     * runs without waiting for that use to end. Never for a call that needs the wallet synced, or proves. Should that
+     * use close the page meanwhile, it fails as the page's calls then do, and may be made again.
+     */
+    suspend fun <T> withSessionAlongside(block: suspend (RailgunSession) -> T): T {
+        val held = wallet.session?.takeIf { lock.isLocked } ?: return withSession(block)
+        return scope
+            .async(work) {
+                check(!isReset) { "the wallet is being reset" }
+                block(held)
+            }.await()
+    }
+
+    /**
      * Stops every use and deletes what the engine stored, as far as the WebView lets it: what's left is
      * encrypted with a key the reset deletes. Nothing runs again until the wallet changes.
      */

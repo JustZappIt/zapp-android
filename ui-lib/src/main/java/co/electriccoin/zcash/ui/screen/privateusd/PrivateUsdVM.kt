@@ -121,7 +121,7 @@ class PrivateUsdVM(
                     onWithdraw = { navigationRouter.forward(PrivateUsdSendArgs(PrivateUsdSendMode.WITHDRAW)) },
                 ),
             activity =
-                activity.mapNotNull {
+                activity.withReceived(balance.received).mapNotNull {
                     activityMapper.createState(
                         data = it,
                         deployment = deployment,
