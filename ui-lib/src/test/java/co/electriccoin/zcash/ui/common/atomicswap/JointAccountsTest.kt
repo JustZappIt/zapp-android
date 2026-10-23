@@ -16,6 +16,7 @@ import cash.z.ecc.android.sdk.model.Pczt
 import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.TransactionId
 import cash.z.ecc.android.sdk.model.TransactionOverview
+import cash.z.ecc.android.sdk.model.UnifiedAddressRequest
 import cash.z.ecc.android.sdk.model.WalletBalance
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.common.datasource.ATOMIC_SWAP_KEYSOURCE
@@ -47,11 +48,14 @@ class JointAccountsTest {
     private val synchronizers = mockk<SynchronizerProvider>()
     private val keys = mockk<SwapKeyring>()
     private val transactions = mockk<SwapZcashTransactions>()
+    private val zashi = mockk<Account>()
     private var created = 0
+
+    // Only the wallet's own account is stubbed, not the address it shows: a sweep that reached for that would fail.
     private val jointAccounts =
         JointAccounts(
             synchronizers = synchronizers,
-            accounts = mockk<AccountDataSource> { coEvery { getZashiAccount().unified.address.address } returns HOME },
+            accounts = mockk<AccountDataSource> { coEvery { getZashiAccount().sdkAccount } returns zashi },
             transactions = transactions,
             keys = keys,
         )
@@ -62,6 +66,8 @@ class JointAccountsTest {
         coEvery { transactions.synced() } returns synchronizer
         every { synchronizer.fullyScannedHeight } returns MutableStateFlow(BlockHeight.new(SCANNED))
         every { synchronizer.networkHeight } returns MutableStateFlow(BlockHeight.new(SCANNED))
+        coEvery { synchronizer.getCustomUnifiedAddress(zashi, UnifiedAddressRequest.Orchard) } returnsMany
+            listOf(FRESH_HOME, NEXT_FRESH_HOME)
     }
 
     @Test
@@ -121,7 +127,7 @@ class JointAccountsTest {
             assertNull(jointAccounts.sweep(joint) { _, _ -> error("signed with notes pending") })
 
             every { synchronizer.walletBalances } returns balances(joint, available = 250_000, pending = 0)
-            coEvery { synchronizer.proposeTransfer(joint, HOME, Zatoshi(240_000), any()) } returns proposal(10_000)
+            coEvery { synchronizer.proposeTransfer(joint, FRESH_HOME, Zatoshi(240_000), any()) } returns proposal(10_000)
             coEvery { synchronizer.createPcztFromProposal(joint.accountUuid, any()) } returns Pczt(byteArrayOf(1))
             coEvery { synchronizer.addProofsToPczt(any()) } returns Pczt(byteArrayOf(2))
             coEvery { synchronizer.redactPcztForSigner(any()) } returns Pczt(byteArrayOf(3))
@@ -138,7 +144,7 @@ class JointAccountsTest {
             val sweep =
                 checkNotNull(
                     jointAccounts.sweep(joint) { pczt, intent ->
-                        assertEquals(HOME, intent.recipient)
+                        assertEquals(FRESH_HOME, intent.recipient)
                         assertEquals(1, intent.minimumReceivedZat)
                         assertEquals(249_999, intent.maximumFeeZat)
                         signatures++
@@ -151,6 +157,57 @@ class JointAccountsTest {
             assertEquals(ZcashTransaction(ZcashTxId.parse("cd".repeat(32)), "04", SCANNED + 40), sweep.transaction)
             assertEquals(240_000, sweep.receivedZat)
             assertEquals(10_000, sweep.feeZat)
+        }
+
+    @Test
+    fun `each sweep pays a new Orchard-only address of the wallet's own account, never one paid before`() =
+        runTest {
+            val joint = account(ufvk(1))
+            val proposedTo = mutableListOf<String>()
+            val signedFor = mutableListOf<String>()
+            val broadcaster = mockk<Broadcaster>()
+            coEvery { synchronizer.getTransactions(joint.accountUuid) } returns flowOf(listOf(sent(expiry = SCANNED)))
+            every { synchronizer.walletBalances } returns balances(joint, available = 250_000, pending = 0)
+            coEvery { synchronizer.proposeTransfer(joint, capture(proposedTo), Zatoshi(240_000), any()) } returns
+                proposal(10_000)
+            coEvery { synchronizer.createPcztFromProposal(joint.accountUuid, any()) } returns Pczt(byteArrayOf(1))
+            coEvery { synchronizer.addProofsToPczt(any()) } returns Pczt(byteArrayOf(2))
+            every { synchronizer.broadcaster } returns broadcaster
+            coEvery { broadcaster.createTransactionFromPczt(any(), any()) } returns
+                listOf(
+                    CreatedTransaction(
+                        FirstClassByteArray(ByteArray(32) { 0xcd.toByte() }),
+                        FirstClassByteArray(byteArrayOf(4)),
+                        BlockHeight.new(SCANNED + 40)
+                    )
+                )
+
+            // The wallet still sees only the expired sweep, so each call makes a sweep anew.
+            repeat(2) {
+                checkNotNull(
+                    jointAccounts.sweep(joint) { pczt, intent ->
+                        signedFor += intent.recipient
+                        pczt
+                    }
+                )
+            }
+
+            assertEquals(listOf(FRESH_HOME, NEXT_FRESH_HOME), signedFor)
+            assertEquals(signedFor, proposedTo)
+            coVerify(exactly = 2) { synchronizer.getCustomUnifiedAddress(zashi, UnifiedAddressRequest.Orchard) }
+        }
+
+    @Test
+    fun `a sweep the fee doesn't authorize takes no address`() =
+        runTest {
+            val joint = account(ufvk(1))
+            coEvery { synchronizer.getTransactions(joint.accountUuid) } returns flowOf(emptyList())
+            every { synchronizer.walletBalances } returns balances(joint, available = 250_000, pending = 0)
+
+            assertFailsWith<IllegalArgumentException> {
+                jointAccounts.sweep(joint, maximumFeeZat = 9_999) { _, _ -> error("signed an unauthorized sweep") }
+            }
+            coVerify(exactly = 0) { synchronizer.getCustomUnifiedAddress(any(), any()) }
         }
 
     @Test
@@ -219,7 +276,8 @@ class JointAccountsTest {
         }
 
     private companion object {
-        const val HOME = "u1home"
+        const val FRESH_HOME = "u1fresh"
+        const val NEXT_FRESH_HOME = "u1fresher"
         const val SCANNED = 3_200_000L
         const val BIRTHDAY = 3_100_000L
         val TX = "ab".repeat(32)
