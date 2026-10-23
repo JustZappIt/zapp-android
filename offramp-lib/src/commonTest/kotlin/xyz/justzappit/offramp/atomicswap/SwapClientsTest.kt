@@ -153,11 +153,9 @@ class SwapClientsTest {
                 """{"swapId":"${SWAP_ID.hex}","chainId":11155111,"to":"$ADDRESS","data":"0x12345678","value":"0"}"""
 
             services.relayer.fundReverse(FUNDING, TICKET)
-            services.relayer.lockClaim(AUTHORIZATION, TERMS, TICKET)
             services.relayer.claim(REVEAL, TERMS, TICKET)
             services.relayer.payout(PAYOUT, TERMS, TICKET)
             services.relayer.ready(AUTHORIZATION, TERMS, TICKET)
-            services.relayer.lockRefund(AUTHORIZATION, TERMS, TICKET)
             services.relayer.refund(REVEAL, TERMS, TICKET)
             services.relayer.refundPayout(PAYOUT, TERMS, TICKET)
             services.relayer.rescue(RESCUE, TERMS, TICKET)
@@ -165,11 +163,9 @@ class SwapClientsTest {
             assertEquals(
                 listOf(
                     "/relayer/v1/reverse/fund" to funding,
-                    "/relayer/v1/lock-claim" to ZecSwapWireSamples.AUTHORIZATION,
                     "/relayer/v1/claim" to ZecSwapWireSamples.REVEAL,
                     "/relayer/v1/payout" to ZecSwapWireSamples.PAYOUT,
                     "/relayer/v1/reverse/ready" to ZecSwapWireSamples.AUTHORIZATION,
-                    "/relayer/v1/reverse/lock-refund" to ZecSwapWireSamples.AUTHORIZATION,
                     "/relayer/v1/reverse/refund" to ZecSwapWireSamples.REVEAL,
                     "/relayer/v1/reverse/refund-payout" to ZecSwapWireSamples.PAYOUT,
                     "/relayer/v1/reverse/rescue" to ZecSwapWireSamples.RESCUE,
@@ -281,15 +277,13 @@ class SwapClientsTest {
             for (ticket in listOf(TICKET, null)) {
                 services.tickets.clear()
                 services.relayer.fundReverse(FUNDING, ticket)
-                services.relayer.lockClaim(AUTHORIZATION, TERMS, ticket)
                 services.relayer.claim(REVEAL, TERMS, ticket)
                 services.relayer.payout(PAYOUT, TERMS, ticket)
                 services.relayer.ready(AUTHORIZATION, TERMS, ticket)
-                services.relayer.lockRefund(AUTHORIZATION, TERMS, ticket)
                 services.relayer.refund(REVEAL, TERMS, ticket)
                 services.relayer.refundPayout(PAYOUT, TERMS, ticket)
                 services.relayer.rescue(RESCUE, TERMS, ticket)
-                assertEquals(List(9) { ticket }, services.tickets)
+                assertEquals(List(7) { ticket }, services.tickets)
             }
             services.close()
         }
@@ -329,6 +323,77 @@ class SwapClientsTest {
                 services.maker.accept(QUOTE_ID, SWAP_ID, ACCEPTANCE),
             )
             assertEquals(TICKET, services.maker.acceptReverse(QUOTE_ID, SWAP_ID, ACCEPTANCE).ticket)
+            services.close()
+        }
+
+    @Test
+    fun theServicesSayWhatContractTheyServeAndTheAcceptItsLateWindow() =
+        runTest {
+            var answer = ZecSwapWireSamples.MAKER_INFO
+            val services = Services { respond(answer) }
+
+            val info = services.maker.info()
+            assertEquals(Triple("windows", 1_800L, 3_600L), Triple(info.contractKind, info.minWindow, info.lateWindow))
+            answer = ZecSwapWireSamples.RELAYER_TERMS
+            val terms = services.relayer.terms()
+            val windows = Triple(terms.contractKind, terms.minWindow, terms.lateWindow)
+            assertEquals(Triple("windows", 1_800L, 3_600L), windows)
+            assertEquals(Usdc6.ofMicros(100_000), terms.fee)
+            answer = ZecSwapWireSamples.ACCEPTED
+            assertEquals(3_600L, services.maker.accept(QUOTE_ID, SWAP_ID, ACCEPTANCE).lateWindow)
+            // A lock contract's services say none of it.
+            answer = RELAYER_TERMS
+            assertNull(services.relayer.terms().contractKind)
+            services.close()
+        }
+
+    @Test
+    fun aSwapRequestTheRelayerAsksToWaitAShortWhileGoesAgainAfterItAndNoLonger() =
+        runTest {
+            val waits = ArrayDeque(listOf("5", "30", "31"))
+            var busy = 2
+            val services =
+                Services {
+                    if (busy-- > 0) {
+                        respond(
+                            """{"code":"unavailable","error":"its own send may still land"}""",
+                            HttpStatusCode.ServiceUnavailable,
+                            headersOf(HttpHeaders.RetryAfter, waits.removeFirst()),
+                        )
+                    } else {
+                        respond("""{"transactions":["$WORD"]}""")
+                    }
+                }
+
+            assertEquals(Sent(listOf(TxHash.fromHex(WORD))), services.relayer.claim(REVEAL, TERMS, TICKET))
+            assertEquals(3, services.paths.size, "posted again after 5 s and after 30 s")
+            assertEquals(1, services.bodies.distinct().size, "the same request each time")
+
+            busy = 1
+            val asked =
+                assertFailsWith<AtomicSwapHttpException.Refused> { services.relayer.refund(REVEAL, TERMS, TICKET) }
+            assertEquals(503, asked.status)
+            assertEquals(31.seconds, asked.retryAfter, "a wait over 30 s is the caller's")
+            assertEquals(4, services.paths.size)
+            services.close()
+        }
+
+    @Test
+    fun aRelayerKeptBusyGivesUpWaitingAfterNinetySecondsInAll() =
+        runTest {
+            val services =
+                Services {
+                    respond(
+                        """{"code":"unavailable","error":"busy"}""",
+                        HttpStatusCode.ServiceUnavailable,
+                        headersOf(HttpHeaders.RetryAfter, "30"),
+                    )
+                }
+
+            assertFailsWith<AtomicSwapHttpException.Refused> { services.relayer.claim(REVEAL, TERMS, TICKET) }
+            assertEquals(4, services.paths.size, "the first post and three after 30 s each")
+            assertFailsWith<AtomicSwapHttpException.Refused> { services.maker.info() }
+            assertEquals(5, services.paths.size, "the maker's reads are never posted again")
             services.close()
         }
 

@@ -175,13 +175,15 @@ class AtomicSwapSessions(
             )
 
         fun deploymentFor(record: AtomicSwapRecord): AtomicSwapDeployment =
-            checkNotNull(
-                KNOWN.firstOrNull {
-                    it.swap.chainId == record.quote.chainId &&
-                        it.swap.contract == record.quote.contract &&
-                        it.swap.token == record.quote.token
-                },
-            ) { "unknown original swap deployment" }
+            checkNotNull(knownDeploymentOf(record)) { "unknown original swap deployment" }
+
+        /** The deployment [record] was accepted on, or null for one this build doesn't know. */
+        fun knownDeploymentOf(record: AtomicSwapRecord): AtomicSwapDeployment? =
+            KNOWN.firstOrNull {
+                it.swap.chainId == record.quote.chainId &&
+                    it.swap.contract == record.quote.contract &&
+                    it.swap.token == record.quote.token
+            }
 
         /** The deployments whose contracts can hold secrets of keys derived on [network]: keys differ by network. */
         internal fun indexedOn(network: SwapZcashNetwork?): List<AtomicSwapDeployment> =

@@ -43,7 +43,8 @@ internal fun AtomicSwapProblem.message(direction: SwapDirection): StringResource
             AtomicSwapProblem.RELAYER_FEE -> R.string.convert_problem_relayer_fee
             AtomicSwapProblem.ETHEREUM_UNREACHABLE -> R.string.convert_problem_ethereum
             AtomicSwapProblem.RAILGUN_CLOSED -> R.string.convert_problem_railgun
-            AtomicSwapProblem.CLAIM_TURN -> R.string.convert_problem_turn
+            AtomicSwapProblem.CLAIM_WINDOW -> R.string.convert_problem_turn
+            AtomicSwapProblem.RETIRED -> R.string.convert_problem_retired
             AtomicSwapProblem.ZCASH_WALLET -> R.string.convert_problem_wallet
             AtomicSwapProblem.DEPOSIT_UNPAYABLE -> R.string.convert_problem_unpayable
             AtomicSwapProblem.ZCASH_REJECTED -> R.string.convert_problem_rejected

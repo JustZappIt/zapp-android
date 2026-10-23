@@ -19,7 +19,10 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
-/** The worker keeps a conversion going; for a forward swap, alarms around `t0` and `t1` wake a stopped app too. */
+/**
+ * The worker keeps a conversion going; for a forward swap, alarms around `t0` and `t1` wake a stopped app too, and at
+ * the end of the maker's late window while the swap unwinds.
+ */
 class AtomicSwapScheduler(
     private val context: Context,
 ) {
@@ -49,6 +52,9 @@ class AtomicSwapScheduler(
         alarm(Wake.LAST_CALL, maxOf(t0 + LAST_CALL_AFTER_T0.inWholeSeconds, t1 - LAST_CALL_BEFORE_T1.inWholeSeconds))
     }
 
+    /** From [late] a swap its maker didn't refund in its late window is the user's to claim for good. */
+    fun wakeLate(late: Long) = alarm(Wake.LATE, late + CLAIMABLE_SLACK.inWholeSeconds)
+
     /** Stops the worker and its wakes. */
     fun cancel() {
         workManager.cancelUniqueWork(WORK_NAME)
@@ -77,7 +83,7 @@ class AtomicSwapScheduler(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    enum class Wake { CLAIMABLE, LAST_CALL }
+    enum class Wake { CLAIMABLE, LAST_CALL, LATE }
 
     companion object {
         const val EXTRA_WAKE = "atomicswap_wake"

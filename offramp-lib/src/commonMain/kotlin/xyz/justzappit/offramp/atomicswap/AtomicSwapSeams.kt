@@ -51,14 +51,6 @@ interface AtomicSwapKeys {
     /** `z`, which a claim reveals. */
     suspend fun claimSecret(index: Int): ByteArray
 
-    suspend fun signLockClaim(
-        index: Int,
-        chainId: ChainId,
-        contract: Address,
-        swapId: SwapId,
-        deadline: Long,
-    ): ByteArray
-
     suspend fun signPayout(
         index: Int,
         chainId: ChainId,
@@ -124,12 +116,28 @@ interface AtomicSwapChainReader {
     suspend fun swap(id: SwapId): SwapState?
 
     /**
-     * The swap [terms] describe at the deployment's confirmation depth; only this authorizes deposits, reveals and
-     * completion. One under [id] that opened with other terms is [AtomicSwapBlock.MISMATCH].
+     * The swap [terms] describe at the deployment's confirmation depth: what deposits and completion go by. One under
+     * [id] that opened with other terms is [AtomicSwapBlock.MISMATCH].
      */
     suspend fun confirmedSwap(
         id: SwapId,
         terms: SwapTerms
+    ): OnChainSwap?
+
+    /**
+     * The one consistent read: the swap [terms] describe and the newest block, the one as of the other. Every reveal
+     * is judged on it, and judged again on a fresh one just before the share goes. A lock contract has none.
+     */
+    suspend fun swapNow(
+        id: SwapId,
+        terms: SwapTerms
+    ): SwapRead
+
+    /** The swap [terms] describe as of [block]: whether a ready shows that far below the head. */
+    suspend fun swapAt(
+        id: SwapId,
+        terms: SwapTerms,
+        block: Long,
     ): OnChainSwap?
 
     /** The confirmed payout event, searched from around [since] (unix seconds) through the confirmed head. */
@@ -138,14 +146,17 @@ interface AtomicSwapChainReader {
         since: Long
     ): SwapPayoutEvidence?
 
+    /** The time of the block whose confirmed `Refunded` event refunded swap [id], searched from around [since]. */
+    suspend fun refundedAt(
+        id: SwapId,
+        since: Long
+    ): Long?
+
     /** The latest block's time: the contract's clock. */
     suspend fun now(): Long
 
     /** Whether Railgun would take a shield of [token] now: not blocklisted, and not paused. */
     suspend fun railgunAccepts(token: Address): Boolean
-
-    /** How long a claim or refund lock holds, in seconds. */
-    suspend fun lockDuration(): Long
 
     /** Whether [owner] opened a swap with [share] as its own: a reverse swap's user share is spent. */
     suspend fun makerKeyUsed(

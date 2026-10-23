@@ -136,8 +136,9 @@ private fun AtomicSwapBlock.toFailure() =
         AtomicSwapBlock.TOKENS_NEED_TOR -> turnedAway()
 
         AtomicSwapBlock.WRONG_DEPLOYMENT,
+        AtomicSwapBlock.RETIRED_CONTRACT,
         AtomicSwapBlock.RAILGUN_CLOSED,
-        AtomicSwapBlock.CLAIM_LOCK_LAPSING,
+        AtomicSwapBlock.CLAIM_WINDOW_SHUT,
         AtomicSwapBlock.MISMATCH,
         AtomicSwapBlock.ZCASH_REJECTED,
         AtomicSwapBlock.INDICES_IN_USE,

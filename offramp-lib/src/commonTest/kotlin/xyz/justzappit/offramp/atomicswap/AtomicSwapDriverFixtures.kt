@@ -19,9 +19,14 @@ import xyz.justzappit.evm.util.toHex
 import xyz.justzappit.offramp.p2p.Usdc6
 
 abstract class AtomicSwapDriverFixtures {
-    protected fun confirming() = AtomicSwapStep.Waiting(AtomicSwapWait.CONFIRMING, NOW + 35 * 60, NOW + 35 * 60 + 300)
+    protected fun confirming() = waiting(AtomicSwapWait.CONFIRMING)
 
-    protected class Harness {
+    protected fun waiting(reason: AtomicSwapWait) =
+        AtomicSwapStep.Waiting(reason, NOW + 35 * 60, NOW + 35 * 60 + T0_TO_T1)
+
+    protected class Harness(
+        val deployment: SwapDeployment = DEPLOYMENT,
+    ) {
         val chain = FakeChain()
         val zcash = FakeZcash()
         val store = FakeStore()
@@ -36,6 +41,12 @@ abstract class AtomicSwapDriverFixtures {
         /** The ticket the maker answers the accept with. */
         var acceptTicket: String? = TICKET
 
+        /** The late window the maker answers the accept with, none where an older maker says nothing of it. */
+        var acceptLateWindow: Long? = LATE_WINDOW
+
+        /** What the maker's info and the relayer's terms say of the contract: its kind and windows, or nothing. */
+        var contractJson = ""","contractKind":"windows","minWindow":$MIN_WINDOW,"lateWindow":$LATE_WINDOW"""
+
         /** The `ZecSwap-Ticket` header each path last went out with, none where it carried none. */
         val tickets = mutableMapOf<String, String?>()
         var relayer = RELAYER
@@ -48,7 +59,9 @@ abstract class AtomicSwapDriverFixtures {
         var claimPaysOut = true
         var zcashNetwork = "testnet"
         var unreachable: String? = null
-        var afterLock: () -> Unit = {}
+
+        /** The swap's record as the store keeps it when each claim reaches the relayer, refused or not. */
+        val keptAtClaim = mutableListOf<AtomicSwapRecord?>()
         private val engine =
             MockEngine { request ->
                 val path = request.url.encodedPath
@@ -57,6 +70,7 @@ abstract class AtomicSwapDriverFixtures {
                 val sent = (request.body as? TextContent)?.text.orEmpty()
                 bodies[path] = sent
                 if (path == unreachable) throw IOException("connection refused")
+                if (path == "/v1/claim") keptAtClaim += store.record
                 val fee = FEE_FIELD.find(sent)?.let { it.groupValues[1].toLong() }
                 val refused = fee != null && leastFee?.let { fee < it } == true
                 val status =
@@ -75,7 +89,7 @@ abstract class AtomicSwapDriverFixtures {
                         path == "/v1/info" -> {
                             """{"apiVersion":1,"maker":"${MAKER.lowercaseHex}","chainId":11155111,""" +
                                 """"contract":"${CONTRACT.lowercaseHex}","token":"${TOKEN.lowercaseHex}",""" +
-                                """"zcashNetwork":"$zcashNetwork","reverseEnabled":false}"""
+                                """"zcashNetwork":"$zcashNetwork","reverseEnabled":false$contractJson}"""
                         }
 
                         path == "/v1/quote" -> {
@@ -85,20 +99,14 @@ abstract class AtomicSwapDriverFixtures {
                         path.endsWith("/accept") -> {
                             chain.opened = true
                             val ticket = acceptTicket?.let { ",\"ticket\":\"$it\"" }.orEmpty()
-                            """{"swapId":"$acceptedSwapId","t0":${chain.t0},"t1":${chain.t0 + 300}$ticket}"""
+                            val late = acceptLateWindow?.let { ",\"lateWindow\":$it" }.orEmpty()
+                            """{"swapId":"$acceptedSwapId","t0":${chain.t0},"t1":${chain.t1}$ticket$late}"""
                         }
 
                         path == "/v1/terms" -> {
                             val expiry = feeExpiresAt?.let { ",\"feeExpiresAt\":$it" }.orEmpty()
                             """{"relayer":"${relayer.lowercaseHex}","chainId":11155111,""" +
-                                """"contract":"${CONTRACT.lowercaseHex}","fee":"$relayerFee"$expiry}"""
-                        }
-
-                        path == "/v1/lock-claim" -> {
-                            sent(1).also {
-                                chain.claimLockUntil = chain.now + LOCK_SECONDS
-                                afterLock()
-                            }
+                                """"contract":"${CONTRACT.lowercaseHex}","fee":"$relayerFee"$expiry$contractJson}"""
                         }
 
                         path == "/v1/claim" -> {
@@ -128,7 +136,7 @@ abstract class AtomicSwapDriverFixtures {
         val keys = FakeKeys()
         val driver =
             AtomicSwapDriver(
-                deployment = DEPLOYMENT,
+                deployment = deployment,
                 depositTerms = ZcashDepositTerms(),
                 maker = MakerClient(http, Url("http://maker")),
                 relayer = RelayerClient(http, Url("http://relayer")),
@@ -150,6 +158,12 @@ abstract class AtomicSwapDriverFixtures {
         suspend fun minedDeposit(): AtomicSwapRecord =
             depositedRecord().also { zcash.status[txId("deposit1")] = ZcashTransactionStatus.Mined(5) }
 
+        /** The chain's newest block and this device's clock, both at [time]. */
+        fun at(time: Long) {
+            chain.now = time
+            clock = time
+        }
+
         private fun sent(transactions: Int): String {
             val hashes = List(transactions) { "\"${hash(it)}\"" }.joinToString()
             return """{"transactions":[$hashes]}"""
@@ -158,17 +172,35 @@ abstract class AtomicSwapDriverFixtures {
 
     protected class FakeChain : AtomicSwapChainReader {
         var opened = false
+
+        /** The newest block's time and number. */
         var now = NOW
+        var head = HEAD
         var stage = SwapStage.OPEN
         var t0 = NOW + 35 * 60
-        var claimLockUntil = 0L
-        var refundLockUntil = 0L
+        var t1Offset = T0_TO_T1
+        val t1 get() = t0 + t1Offset
         var paidOut = false
         var makerShare = MAKER_SHARE
         var payoutNote = NOTE_COMMITMENT
         var secret = ByteArray(32)
         var railgunAccepts = true
         var confirmed: (() -> SwapState?)? = null
+
+        /** What the newest block shows, where it shows something other than the confirmed read. */
+        var latest: (() -> SwapState?)? = null
+
+        /** The block the swap's ready landed in: below it, the swap reads as open still. */
+        var readyBlock = 0L
+
+        /** The blocks the swap was read at, below the newest. */
+        val readAt = mutableListOf<Long>()
+
+        /** Consistent reads made, each judging a reveal. */
+        var reads = 0
+
+        /** When the swap's refund was mined, as its confirmed event tells it. */
+        var refundedAt: Long? = null
 
         /** What the swap on chain opened with, from what the maker answered the accept with. */
         var tamper: (SwapTerms) -> SwapTerms = { it }
@@ -184,13 +216,40 @@ abstract class AtomicSwapDriverFixtures {
             return state?.verified(terms)
         }
 
+        override suspend fun swapNow(
+            id: SwapId,
+            terms: SwapTerms
+        ): SwapRead {
+            reads++
+            val state = latest.let { if (it != null) it() else swap(id) }
+            return SwapRead(state?.verified(terms), ChainHead(head, now))
+        }
+
+        override suspend fun swapAt(
+            id: SwapId,
+            terms: SwapTerms,
+            block: Long,
+        ): OnChainSwap? {
+            readAt += block
+            val then = if (stage == SwapStage.READY && block < readyBlock) SwapStage.OPEN else stage
+            return onChain(id)?.let { it.atStage(then).state(tamper(it.terms)) }?.verified(terms)
+        }
+
         override suspend fun confirmedPayout(
             id: SwapId,
             since: Long
         ): SwapPayoutEvidence? =
             SwapPayoutEvidence(payoutHash, RELAYER, payoutFee).takeIf { paidOut && payoutVisible && id == SWAP_ID }
 
+        override suspend fun refundedAt(
+            id: SwapId,
+            since: Long
+        ): Long? = refundedAt.takeIf { id == SWAP_ID }
+
         override suspend fun swap(id: SwapId): SwapState? = onChain(id)?.let { it.state(tamper(it.terms)) }
+
+        /** The swap as the chain keeps it now, as every read shows it but where [confirmed] or [latest] say else. */
+        fun current(): SwapState? = onChain(SWAP_ID)?.let { it.state(tamper(it.terms)) }
 
         private fun onChain(id: SwapId): OnChainSwap? =
             OnChainSwap(
@@ -199,11 +258,9 @@ abstract class AtomicSwapDriverFixtures {
                 stage = stage,
                 paidOut = paidOut,
                 user = AUTH,
-                t1 = t0 + 300,
+                t1 = t1,
                 token = TOKEN,
-                claimLockUntil = claimLockUntil,
                 amount = AMOUNT,
-                refundLockUntil = refundLockUntil,
                 makerShare = makerShare,
                 userShare = USER_SHARE,
                 secret = secret,
@@ -213,8 +270,6 @@ abstract class AtomicSwapDriverFixtures {
         override suspend fun now() = now
 
         override suspend fun railgunAccepts(token: Address) = railgunAccepts
-
-        override suspend fun lockDuration() = LOCK_SECONDS.toLong()
 
         override suspend fun makerKeyUsed(
             owner: Address,
@@ -252,14 +307,6 @@ abstract class AtomicSwapDriverFixtures {
         ) = "utest1deposit"
 
         override suspend fun claimSecret(index: Int) = ByteArray(32) { 9 }.also { beforeClaimSecret() }
-
-        override suspend fun signLockClaim(
-            index: Int,
-            chainId: ChainId,
-            contract: Address,
-            swapId: SwapId,
-            deadline: Long,
-        ) = ByteArray(65) { 7 }
 
         override suspend fun signPayout(
             index: Int,
@@ -351,7 +398,10 @@ abstract class AtomicSwapDriverFixtures {
 
     protected companion object {
         const val NOW = 1_790_000_000L
-        const val LOCK_SECONDS = 600
+        const val HEAD = 9_000_000L
+        const val MIN_WINDOW = 1_800L
+        const val LATE_WINDOW = 3_600L
+        const val T0_TO_T1 = 3_600L
         const val FEE_VALIDITY = 3_600L
         const val DEPOSIT_ZAT = 202_021L
         const val QUOTE_ID = "0x" + "22222222222222222222222222222222" + "22222222222222222222222222222222"
@@ -382,6 +432,7 @@ abstract class AtomicSwapDriverFixtures {
                 railgunProxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
                 maker = MAKER,
                 relayer = RELAYER,
+                windows = SwapWindows(MIN_WINDOW, LATE_WINDOW),
             )
         val QUOTE_JSON =
             """
@@ -412,5 +463,8 @@ abstract class AtomicSwapDriverFixtures {
 }
 
 /** What the contract keeps of [this] swap, opened with [terms]. */
-internal fun OnChainSwap.state(terms: SwapTerms = this.terms) =
-    SwapState(terms.hash(), stage, paidOut, claimLockUntil, refundLockUntil, secret)
+internal fun OnChainSwap.state(terms: SwapTerms = this.terms) = SwapState(terms.hash(), stage, paidOut, secret)
+
+/** [this] swap at [stage]. */
+internal fun OnChainSwap.atStage(stage: SwapStage) =
+    OnChainSwap(maker, t0, stage, paidOut, user, t1, token, amount, makerShare, userShare, secret, payoutNote)

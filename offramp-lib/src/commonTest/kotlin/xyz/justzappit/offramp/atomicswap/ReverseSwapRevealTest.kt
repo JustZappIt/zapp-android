@@ -6,27 +6,40 @@ package xyz.justzappit.offramp.atomicswap
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 
 class ReverseSwapRevealTest : ReverseSwapDriverFixtures() {
     @Test
-    fun aLockExpiringDuringPreparationNeverDisclosesTheSecret() =
+    fun aReadyLandingDuringPreparationNeverDisclosesTheSecret() =
         runTest {
             for (step in 0..2) {
                 val h = Harness()
                 h.prepared()
                 h.funded()
                 h.saved = h.record.copy(cancelRequested = true)
-                h.refundUntil = h.now + 600
-                val lapse = { h.now += 601 }
+                // The maker's ready lands, a block the confirmed read doesn't show yet.
+                val landed = { h.latest = { h.swap(SwapStage.READY) } }
                 when (step) {
-                    0 -> h.beforePayout = lapse
-                    1 -> h.beforeUpdate = lapse
-                    else -> h.beforeSecret = lapse
+                    0 -> h.beforePayout = landed
+                    1 -> h.beforeUpdate = landed
+                    else -> h.beforeSecret = landed
                 }
                 h.driver.advance()
                 assertEquals(0, h.refundCalls, "step $step")
             }
+        }
+
+    @Test
+    fun aHeadFallingBehindDuringPreparationNeverDisclosesTheSecret() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.funded()
+            h.saved = h.record.copy(cancelRequested = true)
+            h.beforeSecret = { h.clock = h.now + 4 * 60 }
+            assertFailsWith<AtomicSwapBlockedException> { h.driver.advance() }
+            assertEquals(0, h.refundCalls)
         }
 
     @Test
@@ -36,7 +49,6 @@ class ReverseSwapRevealTest : ReverseSwapDriverFixtures() {
             h.prepared()
             h.funded()
             h.saved = h.record.copy(cancelRequested = true)
-            h.refundUntil = h.now + 600
             h.beforeSecret = { h.escrow = h.swap(SwapStage.CLAIMED) }
             h.driver.advance()
             assertEquals(0, h.refundCalls)

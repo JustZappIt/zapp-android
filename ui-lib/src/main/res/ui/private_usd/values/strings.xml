@@ -173,7 +173,7 @@
     <string name="convert_problem_relayer_fee">The relayer\'s fee is more than this conversion pays out right now, so Zapp waits for it to come down. It keeps checking by itself.</string>
     <string name="convert_problem_ethereum">Zapp can\'t reach Ethereum right now. It keeps trying by itself.</string>
     <string name="convert_problem_railgun">Railgun isn\'t accepting deposits right now, so Zapp holds off claiming. If it doesn\'t reopen in time, the swap is called off and your ZEC comes back.</string>
-    <string name="convert_problem_turn">The market maker holds the claim for a few minutes. Zapp claims as soon as it\'s your turn.</string>
+    <string name="convert_problem_turn">Zapp is waiting for the right moment to claim your dollars, and claims them as soon as it can.</string>
     <string name="convert_problem_wallet">Your Zcash wallet isn\'t ready. Zapp retries once it has synced.</string>
     <string name="convert_problem_unpayable" tools:ignore="MissingTranslation">Your wallet can\'t pay the deposit right now, for example because the network fee went up. Zapp keeps trying. If it still can\'t pay in time, the swap ends and nothing is sent.</string>
     <string name="convert_problem_tokens" tools:ignore="MissingTranslation">Zapp can\'t get this conversion\'s token over Tor right now. It keeps trying by itself.</string>
@@ -184,6 +184,7 @@
 
     <!-- Conversions on the windows contract -->
     <string name="private_usd_token_retired_test_usd">Retired test dollar</string>
+    <string name="convert_problem_retired">This conversion is on the conversion contract Zapp used before, which it no longer settles. Your funds are safe there: contact Zapp support to get them back.</string>
 
     <!-- Convert: results -->
     <string name="convert_result_paid_title">Dollars on their way</string>

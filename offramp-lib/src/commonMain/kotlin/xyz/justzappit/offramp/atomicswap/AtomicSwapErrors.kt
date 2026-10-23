@@ -97,8 +97,14 @@ enum class AtomicSwapBlock {
     RELAYER_FEE,
     RAILGUN_CLOSED,
 
-    /** Our claim lock lapses too soon to reveal under, or the maker has the turn after it. */
-    CLAIM_LOCK_LAPSING,
+    /**
+     * The claim's window, judged again on a fresh read just before the share would go, no longer lets it: nothing is
+     * revealed, and the next step reads the swap again.
+     */
+    CLAIM_WINDOW_SHUT,
+
+    /** A conversion on a retired lock contract, whose rules this build doesn't follow: it is history, never driven. */
+    RETIRED_CONTRACT,
     CHAIN_LAGGING,
     UNDER_WAY_ON_CHAIN,
 

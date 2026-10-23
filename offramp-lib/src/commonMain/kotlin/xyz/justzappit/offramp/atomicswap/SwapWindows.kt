@@ -161,6 +161,12 @@ const val REVERSE_READY_DEPTH = 4L
 const val CLAIM_MARGIN_SECONDS = 5 * 60L
 
 /**
+ * How long a signed `ready` or rescue holds (zecSwap's `SIGNATURE_TTL`): a ready is signed only with all of it before
+ * `t0`, and a refund waits until the chain is past it.
+ */
+const val SIGNATURE_TTL_SECONDS = 2 * 60L
+
+/**
  * A forward claim, the user's or a relayer's for it, judged on [head] and the device's clock [wall], with [margin]
  * left in its window (zecSwap's `judge::forward_claim`). Before `t0` it goes only on a ready [READY_DEPTH] blocks deep.
  */

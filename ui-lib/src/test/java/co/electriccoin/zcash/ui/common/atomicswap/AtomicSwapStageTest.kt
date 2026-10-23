@@ -38,6 +38,14 @@ class AtomicSwapStageTest {
     }
 
     @Test
+    fun `a swap unwinding is on its way back, and one made ready or whose claim the relayer holds is claiming`() {
+        assertEquals(AtomicSwapStage.REFUNDING, AtomicSwapStage.of(state(AtomicSwapWait.UNWINDING)))
+        assertEquals(AtomicSwapStage.CLAIMING, AtomicSwapStage.of(state(AtomicSwapWait.READY_DEEPENING)))
+        assertEquals(AtomicSwapStage.CLAIMING, AtomicSwapStage.of(state(AtomicSwapWait.CLAIM_HELD)))
+        assertEquals(AtomicSwapStage.CONFIRMING, AtomicSwapStage.of(state(AtomicSwapWait.RETIRED)))
+    }
+
+    @Test
     fun `a deposit that went out waits for confirmations, even before the loop has looked`() {
         assertEquals(AtomicSwapStage.CONFIRMING, AtomicSwapStage.of(state(AtomicSwapWait.CONFIRMING)))
         assertEquals(AtomicSwapStage.CONFIRMING, AtomicSwapStage.of(state(AtomicSwapWait.DEPOSIT_UNSETTLED)))

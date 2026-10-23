@@ -39,7 +39,6 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
                     "/v1/terms",
                     "/v1/quote/$QUOTE_ID/accept",
                     "/v1/terms",
-                    "/v1/lock-claim",
                     "/v1/claim",
                 ),
                 h.paths,
@@ -357,17 +356,121 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
-    fun nothingIsDepositedIntoASwapTheMakerIsCallingOff() =
+    fun nothingIsDepositedIntoASwapTheMakerCalledOffInTheNewestBlock() =
         runTest {
             val h = Harness()
             val record = h.accepted()
-            h.chain.refundLockUntil = NOW + LOCK_SECONDS
+            h.chain.latest = { h.chain.current()?.withStage(SwapStage.REFUNDED) }
 
             assertEquals(
                 AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.MAKER_CANCELLED)),
                 h.driver.advance(record),
             )
             assertTrue(h.zcash.deposits.isEmpty())
+        }
+
+    @Test
+    fun aKeptDepositIsSentAgainOnlyWhileTheSwapIsOpen() =
+        runTest {
+            val h = Harness()
+            val record = h.depositedRecord()
+            h.chain.latest = { h.chain.current()?.withStage(SwapStage.REFUNDED) }
+
+            h.driver.advance(record)
+
+            assertEquals(listOf(txId("deposit1")), h.zcash.submitted(), "called off: left to be mined or expire")
+            assertEquals(1, h.zcash.deposits.size)
+        }
+
+    @Test
+    fun nothingIsDepositedIntoASwapThatLeavesNoTimeToClaimFromT0OrHoldsTheDepositPastTwoHours() =
+        runTest {
+            for (offset in listOf(2 * CLAIM_MARGIN_SECONDS - 1, 2 * 60 * 60L + 1)) {
+                val h = Harness()
+                h.chain.t1Offset = offset
+                val record = h.accepted()
+
+                assertEquals(
+                    AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.MISMATCH)),
+                    h.driver.advance(record),
+                    "t1 $offset after t0",
+                )
+                assertTrue(h.zcash.deposits.isEmpty())
+            }
+            val h = Harness()
+            h.chain.t1Offset = 2 * CLAIM_MARGIN_SECONDS
+            assertEquals(confirming().copy(t1 = h.chain.t1), h.driver.advance(h.accepted()))
+        }
+
+    @Test
+    fun aDepositStartsOnlyWithinItsWindowFromTheAccept() =
+        runTest {
+            val h = Harness()
+            h.chain.t0 = NOW + 60 * 60
+            val record = h.accepted()
+            h.clock = NOW + 10 * 60 + 1
+
+            assertEquals(
+                AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.DEPOSIT_WINDOW_MISSED)),
+                h.driver.advance(record),
+            )
+            assertTrue(h.zcash.deposits.isEmpty())
+        }
+
+    @Test
+    fun aDeviceClockAheadOfTheChainCanOnlyCloseTheDepositsWindowSooner() =
+        runTest {
+            val ahead = Harness()
+            ahead.chain.t0 = NOW + 30 * 60
+            val record = ahead.accepted()
+            // Six minutes ahead, t0 is less than the 25 minutes a deposit needs away.
+            ahead.clock = NOW + 6 * 60
+
+            assertEquals(
+                AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.DEPOSIT_WINDOW_MISSED)),
+                ahead.driver.advance(record),
+            )
+            assertTrue(ahead.zcash.deposits.isEmpty())
+            val inStep = Harness()
+            inStep.chain.t0 = NOW + 30 * 60
+            inStep.driver.advance(inStep.accepted())
+            assertEquals(1, inStep.zcash.deposits.size)
+        }
+
+    @Test
+    fun anAcceptNamingAnotherLateWindowThanTheContractsEndsWithNothingSent() =
+        runTest {
+            val h = Harness()
+            h.acceptLateWindow = LATE_WINDOW + 1
+
+            val record = h.accepted()
+
+            assertEquals(AtomicSwapOutcome.NothingSent(NothingSentCause.MISMATCH), record.outcome)
+            assertEquals(TICKET, record.ticket, "kept with the deadlines all the same")
+            val older = Harness()
+            older.acceptLateWindow = null
+            assertNull(older.accepted().outcome, "an older maker's answer says nothing of it")
+        }
+
+    @Test
+    fun aMakerOrRelayerNamingAnotherKindOrOtherWindowsIsRefused() =
+        runTest {
+            val other =
+                listOf(
+                    ""","contractKind":"locks"""",
+                    ""","minWindow":${MIN_WINDOW + 1}""",
+                    ""","lateWindow":${LATE_WINDOW * 24}""",
+                )
+            for (named in other) {
+                val h = Harness()
+                h.contractJson = named
+                val refused = assertFailsWith<AtomicSwapBlockedException> { h.driver.quote(ONE_UNIT) }
+                assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, refused.reason, named)
+                assertEquals(listOf("/v1/info"), h.paths)
+            }
+            val h = Harness()
+            h.contractJson = ""
+            assertEquals(0, h.driver.quote(ONE_UNIT).index, "one that says nothing of it fits")
         }
 
     @Test
@@ -429,13 +532,55 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
         runTest {
             val h = Harness()
             val record = h.depositedRecord()
-            h.chain.now = h.chain.t0
-            h.clock = h.chain.t0
+            h.at(h.chain.t0 - 1)
+            assertEquals(confirming(), h.driver.advance(record))
+            assertTrue("/v1/claim" !in h.paths, "before t0 an unready swap is the maker's to call off")
 
+            h.at(h.chain.t0)
             assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
             assertTrue("/v1/claim" in h.paths)
         }
+
+    @Test
+    fun aRetiredContractIsNeverQuotedOrPaidInto() =
+        runTest {
+            val h = Harness(DEPLOYMENT.copy(windows = null))
+
+            val refused = assertFailsWith<AtomicSwapBlockedException> { h.driver.quote(ONE_UNIT) }
+            assertEquals(AtomicSwapBlock.RETIRED_CONTRACT, refused.reason)
+            assertTrue(h.paths.isEmpty())
+        }
+
+    @Test
+    fun aSwapOnARetiredContractIsHistoryUnlessItsMakersRefundBringsTheDepositHome() =
+        runTest {
+            val open = Harness()
+            val unpaid = open.accepted()
+            val retired = Harness(DEPLOYMENT.copy(windows = null))
+            retired.chain.opened = true
+            retired.store.record = unpaid
+
+            assertEquals(
+                AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.MAKER_UNAVAILABLE)),
+                retired.driver.advance(unpaid),
+            )
+            val paid = unpaid.copy(deposit = SwapDeposit.Kept(transaction("deposit1")))
+            retired.store.record = paid
+            retired.chain.stage = SwapStage.READY
+            assertEquals(AtomicSwapStep.Waiting(AtomicSwapWait.RETIRED), retired.driver.advance(paid))
+            assertTrue(retired.paths.isEmpty(), "no relayer is asked anything")
+            assertEquals(0, retired.chain.reads)
+            assertTrue(retired.zcash.submitted().isEmpty())
+
+            retired.chain.stage = SwapStage.REFUNDED
+            retired.zcash.status[txId("deposit1")] = ZcashTransactionStatus.Mined(5)
+            assertEquals(AtomicSwapStep.Waiting(AtomicSwapWait.REFUNDING), retired.driver.advance(paid))
+            assertEquals(1, retired.zcash.sweeps.size)
+        }
 }
+
+/** [this] state at [stage]. */
+internal fun SwapState.withStage(stage: SwapStage) = SwapState(termsHash, stage, paidOut, secret)
 
 private fun ByteArray.plusOne(at: Int = lastIndex) = copyOf().also { it[at] = (it[at] + 1).toByte() }
 
@@ -444,4 +589,4 @@ private fun Address.plusOne() = Address.fromBytes(bytes.plusOne())
 private fun SwapShare.plusOne(word: Int) = SwapShare.of(bytes.plusOne(word * SWAP_WORD_BYTES + SWAP_WORD_BYTES - 1))
 
 /** A forward swap's requests to the relayer, each for the swap. */
-private val SWAP_REQUESTS = listOf("/v1/lock-claim", "/v1/claim", "/v1/payout")
+private val SWAP_REQUESTS = listOf("/v1/claim", "/v1/payout")
