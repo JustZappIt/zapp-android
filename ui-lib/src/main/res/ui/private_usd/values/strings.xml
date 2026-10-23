@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <string name="private_usd_title">Private USD</string>
+    <string name="private_usd_title">Shielded USD</string>
     <string name="private_usd_about_minutes">about %1$d min</string>
     <string name="private_usd_about_hours">about %1$d h</string>
     <string name="private_usd_info_content_description">How this works</string>
@@ -15,8 +15,8 @@
     <string name="private_usd_home_loading">Loading…</string>
     <string name="private_usd_home_unknown" tools:ignore="MissingTranslation">—</string>
     <string name="private_usd_home_separator" tools:ignore="MissingTranslation">·</string>
-    <string name="private_usd_home_content_description">Open private USD</string>
-    <string name="private_usd_banner_title">Converting to private USD</string>
+    <string name="private_usd_home_content_description">Open shielded USD</string>
+    <string name="private_usd_banner_title">Converting to shielded USD</string>
     <string name="private_usd_banner_attention_title">Conversion needs attention</string>
     <string name="private_usd_converting_zec" tools:ignore="MissingTranslation">Converting to ZEC</string>
     <string name="private_usd_banner_view">View</string>
@@ -39,22 +39,22 @@
     <string name="private_usd_action_withdraw">Withdraw</string>
     <string name="private_usd_updated">Updated %1$s</string>
     <string name="private_usd_updating">Updating…</string>
-    <string name="private_usd_first_load">Loading your private balance. The first time reads Railgun\'s history and can take a while.</string>
-    <string name="private_usd_first_load_progress" tools:ignore="MissingTranslation">Loading your private balance: %1$d%%. The first time reads Railgun\'s history and can take a while.</string>
+    <string name="private_usd_first_load">Loading your shielded balance. The first time reads Railgun\'s history and can take a while.</string>
+    <string name="private_usd_first_load_progress">Loading your shielded balance: %1$d%%. The first time reads Railgun\'s history and can take a while.</string>
     <string name="private_usd_refresh_failed">Couldn\'t update the balance. Showing the last known amounts.</string>
     <string name="private_usd_load_failed" tools:ignore="MissingTranslation">Couldn\'t load the balance. Try again in a moment.</string>
     <string name="private_usd_refresh">Refresh</string>
-    <string name="private_usd_empty_title">No private dollars yet</string>
+    <string name="private_usd_empty_title">No shielded dollars yet</string>
     <string name="private_usd_empty_body">Convert ZEC into dollars nobody else can see: not your balance, and not who you pay.</string>
-    <string name="private_usd_info_title">About private USD</string>
-    <string name="private_usd_info_step_convert">Convert — exchange ZEC and private USD.</string>
+    <string name="private_usd_info_title">About shielded USD</string>
+    <string name="private_usd_info_step_convert">Convert — exchange ZEC and shielded USD.</string>
     <string name="private_usd_info_step_screen">Railgun screens new funds for %1$s before they can be spent.</string>
     <string name="private_usd_info_note_private">Nobody else can see your balance, or who you pay.</string>
     <string name="private_usd_info_note_currency">Amounts show in the currency you picked under You, at today\'s rate.</string>
-    <string name="private_usd_info_receive" tools:ignore="MissingTranslation">Receive — share your receive address, under Send and Withdraw. Anyone with a Railgun wallet can send you private USD there.</string>
-    <string name="private_usd_info_refunds" tools:ignore="MissingTranslation">Refunds — recover a refund that couldn\'t enter your private balance.</string>
+    <string name="private_usd_info_receive">Receive — share your receive address, under Send and Withdraw. Anyone with a Railgun wallet can send you shielded USD there.</string>
+    <string name="private_usd_info_refunds">Refunds — recover a refund that couldn\'t enter your shielded balance.</string>
     <string name="private_usd_info_switch_currency" tools:ignore="MissingTranslation">Tap your balance to switch between your currency and dollars.</string>
-    <string name="private_usd_copy_address" tools:ignore="MissingTranslation">Copy your private USD address</string>
+    <string name="private_usd_copy_address">Copy your shielded USD address</string>
     <string name="private_usd_receive_address" tools:ignore="MissingTranslation">Your receive address</string>
 
     <!-- Private USD activity -->
@@ -113,10 +113,10 @@
     <string name="convert_error_store" tools:ignore="MissingTranslation">Zapp can\'t read its saved conversions. Contact Zapp support.</string>
     <string name="convert_notifications_off" tools:ignore="MissingTranslation">Notifications are off, so Zapp can\'t tell you when a conversion needs you.</string>
     <string name="convert_info_title">How converting works</string>
-    <string name="convert_info_step_quote">Enter the ZEC you want to convert, including the network fee. The market maker quotes how much private USD you receive. The quote holds for a few minutes.</string>
+    <string name="convert_info_step_quote">Enter the ZEC you want to convert, including the network fee. The market maker quotes how much shielded USD you receive. The quote holds for a few minutes.</string>
     <string name="convert_info_step_deposit">Your ZEC goes to a deposit address that you and the market maker control together.</string>
-    <string name="convert_info_step_claim">Once the deposit is confirmed, Zapp claims the dollars into your private balance.</string>
-    <string name="convert_info_note_either">Either the dollars reach your private balance, or your ZEC comes back to you.</string>
+    <string name="convert_info_step_claim">Once the deposit is confirmed, Zapp claims the dollars into your shielded balance.</string>
+    <string name="convert_info_note_either">Either the dollars reach your shielded balance, or your ZEC comes back to you.</string>
     <string name="convert_info_note_time">Takes %1$s. You can leave the app: Zapp keeps going and lets you know when it\'s done.</string>
 
     <!-- Convert: review -->
@@ -139,7 +139,7 @@
     <string name="convert_step_confirm">Waiting for confirmations</string>
     <string name="convert_step_confirm_count">%1$d of %2$d</string>
     <string name="convert_step_claim">Claiming your dollars</string>
-    <string name="convert_step_arrive">Arriving in your private balance</string>
+    <string name="convert_step_arrive">Arriving in your shielded balance</string>
     <string name="convert_step_screen">Screening</string>
     <string name="convert_step_refund">Bringing your ZEC back</string>
     <string name="convert_eta_seconds">A few seconds</string>
@@ -161,7 +161,7 @@
         <item quantity="one">The market maker waits for %1$d Zcash confirmation.</item>
         <item quantity="other">The market maker waits for %1$d Zcash confirmations.</item>
     </plurals>
-    <string name="convert_progress_info_claim">Zapp claims the dollars into your private balance. A relayer pays the Ethereum fees.</string>
+    <string name="convert_progress_info_claim">Zapp claims the dollars into your shielded balance. A relayer pays the Ethereum fees.</string>
     <string name="convert_progress_info_screen">Railgun screens them for %1$s before they can be spent.</string>
     <string name="convert_progress_info_refund">If the swap can\'t finish in time, it\'s called off and your ZEC comes back, less a small network fee.</string>
 
@@ -184,8 +184,8 @@
 
     <!-- Convert: results -->
     <string name="convert_result_paid_title">Dollars on their way</string>
-    <string name="convert_result_paid_body">%1$s is in your private balance. Railgun screens new funds for %2$s before they can be spent.</string>
-    <string name="convert_result_screened_body">%1$s is in your private balance, ready to use.</string>
+    <string name="convert_result_paid_body">%1$s is in your shielded balance. Railgun screens new funds for %2$s before they can be spent.</string>
+    <string name="convert_result_screened_body">%1$s is in your shielded balance, ready to use.</string>
     <string name="convert_result_refunded_title">Your ZEC came back</string>
     <string name="convert_result_refunded_maker">The market maker called the swap off, so your ZEC came back to your wallet, less a small network fee.</string>
     <string name="convert_result_refunded_late">The swap couldn\'t be completed in time, so it was called off and your ZEC came back, less a small network fee.</string>
@@ -197,23 +197,23 @@
     <string name="convert_result_mismatch">The swap on Ethereum didn\'t match its quote, so Zapp didn\'t send your ZEC.</string>
     <string name="convert_result_window_missed">The swap opened too late to finish safely, so Zapp didn\'t send your ZEC.</string>
     <string name="convert_result_maker_cancelled">The market maker called the swap off before your ZEC was sent. Your ZEC never left your wallet.</string>
-    <string name="convert_result_view_balance">View private USD</string>
+    <string name="convert_result_view_balance">View shielded USD</string>
     <string name="convert_result_try_again">Try again</string>
     <string name="convert_result_done">Done</string>
 
     <!-- Notifications -->
-    <string name="private_usd_channel_progress">Private USD conversions</string>
+    <string name="private_usd_channel_progress">Shielded USD conversions</string>
     <string name="private_usd_channel_progress_description">Shows while a conversion is running.</string>
-    <string name="private_usd_channel_updates">Private USD updates</string>
+    <string name="private_usd_channel_updates">Shielded USD updates</string>
     <string name="private_usd_channel_updates_description">Tells you when a conversion finishes or needs you.</string>
     <string name="private_usd_notification_public">Zapp is working in the background</string>
     <string name="private_usd_notification_paid_title">Conversion complete</string>
-    <string name="private_usd_notification_paid_body">Your dollars are in your private balance.</string>
+    <string name="private_usd_notification_paid_body">Your dollars are in your shielded balance.</string>
     <string name="private_usd_notification_refunded_body">The conversion was called off and your ZEC is back in your wallet.</string>
     <string name="private_usd_notification_nothing_title">Conversion didn\'t go ahead</string>
     <string name="private_usd_notification_nothing_body">Nothing was sent. Your ZEC is still in your wallet.</string>
     <string name="private_usd_notification_needs_you_title">Your conversion needs you</string>
-    <string name="private_usd_notification_needs_you_body">Open Zapp so it can finish converting to private USD.</string>
+    <string name="private_usd_notification_needs_you_body">Open Zapp so it can finish converting to shielded USD.</string>
     <string name="reverse_notification_needs_you_body" tools:ignore="MissingTranslation">The ZEC for your conversion is in. Open Zapp to approve settlement.</string>
     <string name="reverse_notification_held_up_body">Your conversion is taking longer than usual. Open Zapp so it can carry on.</string>
 
@@ -265,23 +265,23 @@
     <string name="private_usd_send_unavailable" tools:ignore="MissingTranslation">Private sends are unavailable right now. Nothing was sent. Try again later.</string>
     <string name="private_usd_send_fee_rose" tools:ignore="MissingTranslation">The network fee went up to %1$s. Nothing was sent.</string>
     <string name="private_usd_send_unconfirmed" tools:ignore="MissingTranslation">It isn\'t in a block yet. Check your activity before sending again.</string>
-    <string name="reverse_title">Private USD → ZEC</string>
-    <string name="reverse_intro">Approve sending Private USD first. After your wallet independently confirms the full ZEC deposit, approve settlement to receive shielded ZEC.</string>
+    <string name="reverse_title">Shielded USD → ZEC</string>
+    <string name="reverse_intro">Approve sending shielded USD first. After your wallet independently confirms the full ZEC deposit, approve settlement to receive shielded ZEC.</string>
     <string name="reverse_ready">Authorize settlement</string>
     <string name="reverse_new">New conversion</string>
     <string name="reverse_cancel">Cancel conversion</string>
     <string name="reverse_rescue">Recover refund</string>
     <string name="reverse_accepting">Preparing your receiving account</string>
     <string name="reverse_review">Review and authorize your payment</string>
-    <string name="reverse_sending">Sending Private USD</string>
+    <string name="reverse_sending">Sending shielded USD</string>
     <string name="reverse_confirming">Confirming escrow</string>
     <string name="reverse_receiving">Waiting for confirmed ZEC</string>
-    <string name="reverse_ready_explanation">The full ZEC deposit is confirmed. Authorize settlement to release your Private USD and move ZEC to your shielded wallet.</string>
+    <string name="reverse_ready_explanation">The full ZEC deposit is confirmed. Authorize settlement to release your shielded USD and move ZEC to your shielded wallet.</string>
     <string name="reverse_settling">Waiting for settlement</string>
     <string name="reverse_sweeping">Moving ZEC to your shielded wallet</string>
     <string name="reverse_refund_wait">Waiting until a refund can proceed. Zapp will retry automatically.</string>
     <string name="reverse_refunding">Securing your private refund</string>
-    <string name="reverse_payout">Returning your Private USD to Railgun</string>
+    <string name="reverse_payout">Returning your shielded USD to Railgun</string>
     <string name="reverse_complete">ZEC received in your shielded wallet</string>
     <string name="reverse_refunded">Private refund paid. Railgun screening may delay availability.</string>
     <string name="reverse_cancelled">Conversion cancelled; no escrow payment remains</string>
@@ -292,8 +292,8 @@
     <string name="reverse_total">Total paid</string>
     <string name="reverse_receive_estimate">Estimated ZEC after sweep fee</string>
     <string name="reverse_refund_note" tools:ignore="MissingTranslation">Before settlement authorization, you can cancel. Afterwards, refunds wait for the contract deadline and lock. A refund pays the relayer\'s fee for its gas, plus Railgun shielding fees. Closing the app never authorizes settlement.</string>
-    <string name="reverse_insufficient">Not enough Private USD for this amount and its fees.</string>
-    <string name="reverse_title_description" tools:ignore="MissingTranslation">Private USD to ZEC</string>
+    <string name="reverse_insufficient">Not enough shielded USD for this amount and its fees.</string>
+    <string name="reverse_title_description">Shielded USD to ZEC</string>
     <string name="reverse_error_max" tools:ignore="MissingTranslation">Couldn\'t work out the most you can convert. Try again in a moment.</string>
     <string name="reverse_error_rescue" tools:ignore="MissingTranslation">Couldn\'t recover the refund. Try again in a moment.</string>
     <string name="reverse_error_unconfirmed" tools:ignore="MissingTranslation">The market maker\'s ZEC isn\'t confirmed yet. Try again in a few minutes.</string>
@@ -312,19 +312,19 @@
     <string name="reverse_result_refunded">Refund sent</string>
     <string name="reverse_result_cancelled">Conversion cancelled</string>
     <string name="reverse_progress_received">%1$s arrived after fees.</string>
-    <string name="reverse_step_fund">Sending private USD to escrow</string>
+    <string name="reverse_step_fund">Sending shielded USD to escrow</string>
     <string name="reverse_step_settle">Settling your conversion</string>
     <string name="reverse_step_approval_detail">Your approval is needed to continue.</string>
     <string name="private_usd_switch_currency">Switch balance currency</string>
-    <string name="private_usd_info_send">Send — transfer private USD to another Railgun address. The recipient receives it privately.</string>
-    <string name="private_usd_info_withdraw">Withdraw — move private USD to a public Ethereum address. The destination and amount are visible on Ethereum.</string>
+    <string name="private_usd_info_send">Send — transfer shielded USD to another Railgun address. The recipient receives it privately.</string>
+    <string name="private_usd_info_withdraw">Withdraw — move shielded USD to a public Ethereum address. The destination and amount are visible on Ethereum.</string>
     <string name="private_usd_checking_payments">Checking pending payments…</string>
     <string name="private_usd_payment_pending">A previous payment is still pending. You can send or convert again once it is confirmed.</string>
     <string name="private_usd_conversion_pending">A conversion is in progress. Sending will be available when it finishes.</string>
     <string name="refunds_title">Refunds</string>
     <string name="refunds_view">View refunds</string>
     <string name="refunds_subtitle">Refunds from earlier conversions</string>
-    <string name="refunds_info">If a refund could not enter your private balance, recover it here. Railgun screening may delay availability.</string>
+    <string name="refunds_info">If a refund could not enter your shielded balance, recover it here. Railgun screening may delay availability.</string>
     <string name="refunds_original_amount">Original conversion amount</string>
     <string name="refunds_empty">No refunded conversions yet.</string>
     <string name="refunds_checking">Checking refunds…</string>

@@ -381,7 +381,7 @@ private fun PrivateUsdPreview() =
                                 onClick = {},
                             ),
                         ),
-                    info = PrivateUsdInfo(title = stringRes("About private USD")),
+                    info = PrivateUsdInfo(title = stringRes("About shielded USD")),
                     convertButton = ButtonState(stringRes("Convert")),
                     onRefresh = {},
                     onBack = {},

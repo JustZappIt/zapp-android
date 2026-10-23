@@ -164,7 +164,7 @@ private fun ProgressPreview() =
                             steps =
                                 listOf(
                                     ZappStep(stringRes("Preparing your receiving account"), ZappStepStatus.Completed),
-                                    ZappStep(stringRes("Sending Private USD to escrow"), ZappStepStatus.Completed),
+                                    ZappStep(stringRes("Sending shielded USD to escrow"), ZappStepStatus.Completed),
                                     ZappStep(stringRes("Waiting for confirmed ZEC"), ZappStepStatus.Completed),
                                     ZappStep(stringRes("Authorize settlement"), ZappStepStatus.InProgress),
                                 ),
@@ -174,7 +174,7 @@ private fun ProgressPreview() =
                             callOff = ButtonState(stringRes("Cancel")),
                             showsBackgroundNote = true,
                             primaryButton = ButtonState(stringRes("Authorize settlement")),
-                            info = PrivateUsdInfo(title = stringRes("Private USD → ZEC")),
+                            info = PrivateUsdInfo(title = stringRes("Shielded USD → ZEC")),
                             onBack = {},
                         ),
                 ),
@@ -196,7 +196,7 @@ private fun previewState() =
         progress = null,
         refunds = null,
         error = null,
-        info = PrivateUsdInfo(title = stringRes("Private USD → ZEC")),
+        info = PrivateUsdInfo(title = stringRes("Shielded USD → ZEC")),
         primary = ButtonState(stringRes("Review")),
         isBackEnabled = true,
         pinVerify = null,

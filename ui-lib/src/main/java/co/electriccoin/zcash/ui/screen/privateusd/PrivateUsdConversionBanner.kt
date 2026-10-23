@@ -105,7 +105,7 @@ private fun PrivateUsdConversionBannerPreview() =
             PrivateUsdConversionBanner(
                 state =
                     PrivateUsdConversionBannerState(
-                        title = stringRes("Converting to private USD"),
+                        title = stringRes("Converting to shielded USD"),
                         detail = stringRes("Waiting for confirmations · 2 of 3"),
                         isAttention = false,
                         onClick = {},
