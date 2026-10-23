@@ -28,9 +28,8 @@ internal data class PrivateUsdState(
     val convertButton: ButtonState,
     val onRefresh: () -> Unit,
     val onBack: () -> Unit,
-    /** This wallet's `0zk` address, where anyone with a Railgun wallet can send private USD. */
-    val receiveAddress: String? = null,
-    val onCopyAddress: () -> Unit = {},
+    /** Opens Receive, the only way to the wallet's addresses. */
+    val onReceive: () -> Unit = {},
     val refundsButton: ButtonState? = null,
     val spendingNote: StringResource? = null,
 )

@@ -9,8 +9,10 @@ import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.backgroundScope
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
+import co.electriccoin.zcash.ui.common.privateusd.NoPrivateUsdDeposits
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepositoryImpl
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.provider.IdentityVerificationStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
@@ -162,6 +164,8 @@ val repositoryModule =
             )
         }
         single { PrivateUsdSpendGuard(get(), get(), get(), backgroundScope("Private USD spending")) }
+        // Deposits are not built yet: the Receive page's USD tab stays hidden until this binds a repository.
+        single<PrivateUsdDepositsRepository> { NoPrivateUsdDeposits }
         singleOf(::LinkPreviewRepository)
         singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
         single<BaseBalanceRepository> {

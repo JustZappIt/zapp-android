@@ -51,11 +51,51 @@
     <string name="private_usd_info_step_screen">Railgun screens new funds for %1$s before they can be spent.</string>
     <string name="private_usd_info_note_private">Nobody else can see your balance, or who you pay.</string>
     <string name="private_usd_info_note_currency">Amounts show in the currency you picked under You, at today\'s rate.</string>
-    <string name="private_usd_info_receive">Receive — share your receive address, under Send and Withdraw. Anyone with a Railgun wallet can send you shielded USD there.</string>
+    <string name="private_usd_info_receive">Receive — your Railgun address, where another Railgun wallet can send you shielded USD privately, with no fee.</string>
     <string name="private_usd_info_refunds">Refunds — recover a refund that couldn\'t enter your shielded balance.</string>
     <string name="private_usd_info_switch_currency" tools:ignore="MissingTranslation">Tap your balance to switch between your currency and dollars.</string>
-    <string name="private_usd_copy_address">Copy your shielded USD address</string>
-    <string name="private_usd_receive_address" tools:ignore="MissingTranslation">Your receive address</string>
+    <string name="private_usd_copy_address">Copy your Railgun address</string>
+    <string name="private_usd_receive_address">Your Railgun address</string>
+
+    <!-- Receive -->
+    <string name="private_usd_action_receive">Receive</string>
+    <string name="private_usd_info_receive_deposits">Receive — public %1$s from an exchange or any wallet goes to your deposit address, and Zapp shields it for a small fee. Another Railgun wallet can send to your Railgun address privately, with no fee.</string>
+    <string name="private_usd_network_ethereum" translatable="false">Ethereum</string>
+    <string name="private_usd_network_sepolia" translatable="false">Sepolia</string>
+    <string name="private_usd_receive_title">Receive</string>
+    <string name="private_usd_receive_tab_usd">USD</string>
+    <string name="private_usd_receive_tab_shielded">Shielded USD</string>
+    <string name="private_usd_receive_info_title">Receiving shielded USD</string>
+    <string name="private_usd_receive_info_usd">USD — public %1$s from an exchange or any wallet goes to your deposit address, and Zapp shields it on its own for a small fee.</string>
+    <string name="private_usd_receive_info_shielded">Shielded USD — another Railgun wallet sends straight to your Railgun address, privately and with no fee.</string>
+    <string name="private_usd_receive_shielded_only">Only from a Railgun wallet on %1$s</string>
+    <string name="private_usd_receive_shielded_note">Shielded USD sent from another Railgun wallet arrives here privately, with no fee.</string>
+    <string name="private_usd_receive_shielded_qr">QR code of your Railgun address</string>
+    <string name="private_usd_receive_shielded_loading">Loading your Railgun address…</string>
+    <string name="private_usd_receive_shielded_failed">Couldn\'t load your Railgun address. Try again in a moment.</string>
+    <string name="private_usd_receive_usd_only">Send only %1$s on %2$s. Other tokens, or %1$s on other networks, are lost or stuck.</string>
+    <string name="private_usd_receive_usd_address">Your deposit address</string>
+    <string name="private_usd_receive_usd_copy">Copy your deposit address</string>
+    <string name="private_usd_receive_usd_qr">QR code of your deposit address</string>
+    <string name="private_usd_receive_usd_loading">Loading your deposit address…</string>
+    <string name="private_usd_receive_usd_failed">Couldn\'t load your deposit address. Try again in a moment.</string>
+    <string name="private_usd_receive_usd_minimum">Minimum</string>
+    <string name="private_usd_receive_usd_relayer_fee">Relayer fee</string>
+    <string name="private_usd_receive_usd_relayer_fee_value">%1$s + %2$s%%</string>
+    <string name="private_usd_receive_usd_railgun_fee">Railgun fee</string>
+    <string name="private_usd_receive_usd_railgun_fee_value">%1$s%%</string>
+    <string name="private_usd_receive_usd_example">Sending %1$s brings about %2$s.</string>
+    <string name="private_usd_receive_usd_fees_loading">Loading the fees…</string>
+    <string name="private_usd_receive_usd_fees_failed">Couldn\'t load the fees. Money sent here waits safely at this address.</string>
+    <string name="private_usd_receive_usd_how">Zapp shields it on its own while Zapp is open and unlocked. There\'s nothing to tap.</string>
+    <string name="private_usd_receive_usd_available">It can be spent %1$s after it arrives, once Railgun has screened it.</string>
+    <string name="private_usd_receive_usd_public">The sender and the amount are public on %1$s. Your balance is private from then on.</string>
+    <string name="private_usd_receive_line_received">Received %1$s</string>
+    <string name="private_usd_receive_line_under_minimum">Received %1$s, under the %2$s minimum. Send more to this address.</string>
+    <string name="private_usd_receive_line_waiting">Received %1$s. Waiting for the network; your money is safe at your deposit address.</string>
+    <string name="private_usd_receive_line_shielding">Received %1$s. Shielding…</string>
+    <string name="private_usd_receive_line_shielded">Shielded %1$s, available in %2$s</string>
+    <string name="private_usd_receive_line_not_shielding">Received %1$s, not shielded yet. Zapp tries again later; your money is safe at your deposit address.</string>
 
     <!-- Private USD activity -->
     <string name="private_usd_activity_title">Activity</string>
