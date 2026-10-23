@@ -103,7 +103,7 @@ class DepositKeysTest {
             assertEquals(DepositKeys.address(SEED, mainnet = true, account = 0, index = 20 + i), address)
         }
         assertEquals(20, window.toSet().size)
-        assertEquals(emptyList(), DepositKeys.addresses(SEED, mainnet = true, account = 0, indices = 5 until 5))
+        assertEquals(emptyList(), DepositKeys.addresses(SEED, mainnet = true, account = 0, indices = IntRange.EMPTY))
     }
 
     @Test
@@ -180,11 +180,13 @@ internal fun signer(
     signature: DepositSignature,
 ): Address? {
     val bytes = signature.bytes
+    val r = BigInteger(1, bytes.copyOfRange(0, 32))
     val s = BigInteger(1, bytes.copyOfRange(32, 64))
     val v = bytes[64].toInt()
-    if (v != 27 && v != 28 || s > SECP256K1_N.shiftRight(1)) return null
-    val point =
-        EcdsaSigner.recoverPublicKeyBytes(v - 27, BigInteger(1, bytes.copyOfRange(0, 32)), s, digest) ?: return null
-    val hash = keccak256(point.copyOfRange(1, point.size))
-    return Address.fromBytes(hash.copyOfRange(hash.size - 20, hash.size))
+    val accepted = (v == 27 || v == 28) && s <= SECP256K1_N.shiftRight(1)
+    val point = if (accepted) EcdsaSigner.recoverPublicKeyBytes(v - 27, r, s, digest) else null
+    return point?.let {
+        val hash = keccak256(it.copyOfRange(1, it.size))
+        Address.fromBytes(hash.copyOfRange(hash.size - 20, hash.size))
+    }
 }

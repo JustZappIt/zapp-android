@@ -127,7 +127,8 @@ class JointAccountsTest {
             assertNull(jointAccounts.sweep(joint) { _, _ -> error("signed with notes pending") })
 
             every { synchronizer.walletBalances } returns balances(joint, available = 250_000, pending = 0)
-            coEvery { synchronizer.proposeTransfer(joint, FRESH_HOME, Zatoshi(240_000), any()) } returns proposal(10_000)
+            coEvery { synchronizer.proposeTransfer(joint, FRESH_HOME, Zatoshi(240_000), any()) } returns
+                proposal(10_000)
             coEvery { synchronizer.createPcztFromProposal(joint.accountUuid, any()) } returns Pczt(byteArrayOf(1))
             coEvery { synchronizer.addProofsToPczt(any()) } returns Pczt(byteArrayOf(2))
             coEvery { synchronizer.redactPcztForSigner(any()) } returns Pczt(byteArrayOf(3))
