@@ -159,7 +159,7 @@ class AtomicSwapSettlementTest : AtomicSwapDriverFixtures() {
             assertEquals(h.chain.payoutHash, h.store.record?.payoutTx)
             assertEquals(Usdc6.ofMicros(987_525), h.store.record?.receives)
             assertEquals(record.relayerFee, h.store.record?.relayerFee, "the offer's fee is kept")
-            assertTrue(h.keys.signedFees.isEmpty())
+            assertEquals(listOf(Usdc6.ofMicros(20_000)), h.keys.signedFees, "nothing but the hand-over's payout")
         }
 
     @Test

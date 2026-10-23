@@ -379,6 +379,46 @@ class SwapClientsTest {
         }
 
     @Test
+    fun aClaimHandedOverGoesOutAsTheClaimAndIsHeldOrAnsweredAsAClaimedSwap() =
+        runTest {
+            var status = HttpStatusCode.OK
+            var answer = """{"held":true}"""
+            val services =
+                Services { respond(answer, status, headersOf(HttpHeaders.RetryAfter, "5")) }
+
+            services.relayer.holdClaim(REVEAL, TERMS, TICKET)
+            answer = """{"transactions":["$WORD","$WORD"]}"""
+            services.relayer.holdClaim(REVEAL, TERMS, TICKET)
+            assertEquals(
+                listOf("/relayer/v1/claim/hold" to ZecSwapWireSamples.REVEAL),
+                services.paths.zip(services.bodies).distinct(),
+                "the claim's own body, posted again as the same bytes",
+            )
+            assertEquals(listOf<String?>(TICKET, TICKET), services.tickets)
+
+            answer = """{"held":false}"""
+            assertFailsWith<AtomicSwapHttpException.Unreadable> { services.relayer.holdClaim(REVEAL, TERMS, TICKET) }
+            val refusals =
+                listOf(
+                    Triple(HttpStatusCode.BadRequest, """{"code":"rejected","error":"holds no claims"}""", true),
+                    Triple(HttpStatusCode.NotFound, "Not Found", false),
+                    Triple(HttpStatusCode.ServiceUnavailable, """{"code":"unavailable","error":"busy"}""", false),
+                )
+            for ((refusal, body, isRejected) in refusals) {
+                status = refusal
+                answer = body
+                val refused =
+                    assertFailsWith<AtomicSwapHttpException.Refused> {
+                        services.relayer.holdClaim(REVEAL, TERMS, TICKET)
+                    }
+                assertEquals(refusal.value, refused.status)
+                assertEquals(isRejected, refused.code == SwapErrorCode.REJECTED)
+            }
+            assertEquals(6, services.paths.size, "a busy relayer's hold is left to the next step, not waited out")
+            services.close()
+        }
+
+    @Test
     fun aRelayerKeptBusyGivesUpWaitingAfterNinetySecondsInAll() =
         runTest {
             val services =

@@ -172,6 +172,13 @@ data class Sent(
     val transactions: List<TxHash>
 )
 
+/** `/v1/claim/hold`'s answer (zecswap-api's `relayer::Held`): held, or for a swap claimed already, what was sent. */
+@Serializable
+internal class ClaimHeld(
+    val held: Boolean = false,
+    val transactions: List<TxHash>? = null,
+)
+
 @Serializable
 internal data class QuoteRequest(
     val units: Long,

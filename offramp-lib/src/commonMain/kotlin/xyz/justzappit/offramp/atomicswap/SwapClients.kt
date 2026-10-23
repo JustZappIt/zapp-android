@@ -86,6 +86,17 @@ interface SwapRelayer {
         ticket: String?
     ): Sent
 
+    /**
+     * Hands over the claim [claim] takes before its window opens, for the relayer to keep and send the moment it does:
+     * returns once held, or for a swap claimed already. A refusal holds nothing; a relayer without the route answers
+     * `404`.
+     */
+    suspend fun holdClaim(
+        reveal: SwapReveal,
+        terms: SwapTerms,
+        ticket: String?
+    )
+
     suspend fun payout(
         payout: SwapPayout,
         terms: SwapTerms,
@@ -230,6 +241,21 @@ class RelayerClient(
         terms: SwapTerms,
         ticket: String?
     ) = service.send("/v1/claim", reveal.request(terms), RevealRequest.serializer(), ticket)
+
+    // Not patient: a 503 leaves it to the next step, so a busy relayer never holds up the claim.
+    override suspend fun holdClaim(
+        reveal: SwapReveal,
+        terms: SwapTerms,
+        ticket: String?
+    ) {
+        service.post(
+            "/v1/claim/hold",
+            reveal.request(terms),
+            RevealRequest.serializer(),
+            ClaimHeld.serializer(),
+            ticket = ticket,
+        ) { require(it.held || it.transactions != null) { "the relayer neither held nor claimed" } }
+    }
 
     override suspend fun payout(
         payout: SwapPayout,

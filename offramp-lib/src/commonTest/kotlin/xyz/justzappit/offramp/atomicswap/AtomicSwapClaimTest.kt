@@ -207,7 +207,7 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
             h.at(h.chain.t1 + LATE_WINDOW - 1)
             assertEquals(waiting(AtomicSwapWait.UNWINDING), h.driver.advance(record))
             assertTrue("/v1/claim" !in h.paths)
-            assertTrue(h.keys.signedFees.isEmpty(), "nothing is signed for a claim that can't go")
+            assertEquals(listOf(Usdc6.ofMicros(20_000)), h.keys.signedFees, "nothing but the hand-over's payout")
 
             // ...and after it, the claim is the user's for good.
             h.at(h.chain.t1 + LATE_WINDOW)
@@ -328,7 +328,8 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
             h.chain.now = h.clock
 
             assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
-            assertEquals(listOf(Usdc6.ofMicros(30_000)), h.keys.signedFees)
+            // The hand-over, within the hour, signed the offer's fee.
+            assertEquals(listOf(Usdc6.ofMicros(20_000), Usdc6.ofMicros(30_000)), h.keys.signedFees)
             assertEquals(payoutAfterFees(AMOUNT, Usdc6.ofMicros(30_000)), h.store.record?.receives)
         }
 
@@ -514,7 +515,7 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
             val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
             assertEquals(AtomicSwapBlock.RELAYER_FEE, blocked.reason)
             assertTrue("/v1/payout" !in h.paths)
-            assertTrue(h.keys.signedFees.isEmpty())
+            assertEquals(listOf(Usdc6.ofMicros(20_000)), h.keys.signedFees, "nothing but the hand-over's payout")
             assertNull(h.store.record?.outcome)
         }
 

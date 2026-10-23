@@ -171,6 +171,8 @@
     <string name="convert_retired">Esta conversión está en el contrato de conversión que Zapp usaba antes, que ya no liquida. Si el creador de mercado cancela el intercambio, Zapp devuelve tus ZEC a tu billetera.</string>
     <string name="reverse_refund_note">Antes de autorizar la liquidación, puedes cancelar. Después, un reembolso espera hasta que la liquidación que autorizaste ya no pueda completarse: unos minutos si nunca empieza, o hasta el plazo de la conversión si empieza. Un reembolso paga la comisión del relayer por su gas, más la comisión de Railgun por protegerlo. Cerrar la aplicación nunca autoriza la liquidación.</string>
     <string name="private_usd_about_hours_minutes">unas %1$d h %2$d min</string>
+    <string name="convert_claim_held">El relayer guarda tu reclamación y la envía en cuanto puede salir, así que ya puedes cerrar Zapp, o incluso apagar el teléfono. Si en cambio se cancela el intercambio, vuelve a abrir Zapp para recuperar tus ZEC.</string>
+    <string name="convert_held_short">El relayer tiene tu reclamación: puedes cerrar Zapp</string>
 
     <string name="convert_result_paid_title">Dólares en camino</string>
     <string name="convert_result_paid_body">%1$s está en tu saldo privado. Railgun revisa los fondos nuevos durante %2$s antes de que se puedan gastar.</string>

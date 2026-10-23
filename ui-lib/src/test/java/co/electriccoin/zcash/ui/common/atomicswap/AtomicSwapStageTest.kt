@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.screen.privateusd.toUsd
 import xyz.justzappit.offramp.atomicswap.AtomicSwapActivity
 import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
@@ -38,11 +39,18 @@ class AtomicSwapStageTest {
     }
 
     @Test
-    fun `a swap unwinding is on its way back, and one made ready or whose claim the relayer holds is claiming`() {
+    fun `a swap unwinding is on its way back, one made ready is claiming, and one held waits for confirmations`() {
         assertEquals(AtomicSwapStage.REFUNDING, AtomicSwapStage.of(state(AtomicSwapWait.UNWINDING)))
         assertEquals(AtomicSwapStage.CLAIMING, AtomicSwapStage.of(state(AtomicSwapWait.READY_DEEPENING)))
-        assertEquals(AtomicSwapStage.CLAIMING, AtomicSwapStage.of(state(AtomicSwapWait.CLAIM_HELD)))
+        assertEquals(AtomicSwapStage.CONFIRMING, AtomicSwapStage.of(state(AtomicSwapWait.CLAIM_HELD)))
         assertEquals(AtomicSwapStage.CONFIRMING, AtomicSwapStage.of(state(AtomicSwapWait.RETIRED)))
+    }
+
+    @Test
+    fun `the progress notification names the stage, or once the relayer holds the claim, that the user may leave`() {
+        assertEquals(R.string.convert_held_short, state(AtomicSwapWait.CLAIM_HELD).progressText())
+        assertEquals(AtomicSwapStage.CONFIRMING.label, state(AtomicSwapWait.CONFIRMING).progressText())
+        assertEquals(AtomicSwapStage.REFUNDING.label, state(AtomicSwapWait.UNWINDING).progressText())
     }
 
     @Test

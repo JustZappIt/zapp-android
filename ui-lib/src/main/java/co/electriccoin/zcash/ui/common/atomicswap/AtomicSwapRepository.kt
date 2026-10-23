@@ -267,7 +267,7 @@ internal class AtomicSwapConversions(
 
     private suspend fun confirmations(step: AtomicSwapStep.Waiting): Int? {
         val txId = store.underWay()?.deposit?.txId
-        return if (step.reason == AtomicSwapWait.CONFIRMING && txId != null) {
+        return if (step.reason in COUNTS_CONFIRMATIONS && txId != null) {
             try {
                 zcash.confirmations(txId)
             } catch (e: SdkException) {
@@ -280,6 +280,9 @@ internal class AtomicSwapConversions(
     }
 
     private companion object {
+        // A claim the relayer holds waits for the deposit's confirmations too.
+        val COUNTS_CONFIRMATIONS = setOf(AtomicSwapWait.CONFIRMING, AtomicSwapWait.CLAIM_HELD)
+
         fun pollInterval(reason: AtomicSwapWait) =
             when (reason) {
                 AtomicSwapWait.OPENING, AtomicSwapWait.READY_DEEPENING -> 5.seconds

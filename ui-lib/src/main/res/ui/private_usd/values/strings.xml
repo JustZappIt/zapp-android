@@ -189,6 +189,8 @@
     <string name="convert_unwinding">It\'s too late to claim your dollars before %1$s, so the market maker can call the swap off now, and Zapp then brings your ZEC back. If it hasn\'t by %2$s, Zapp claims your dollars instead.</string>
     <string name="convert_retired">This conversion is on the conversion contract Zapp used before, which it no longer settles. If the market maker calls the swap off, Zapp brings your ZEC back to your wallet.</string>
     <string name="private_usd_about_hours_minutes">about %1$d h %2$d min</string>
+    <string name="convert_claim_held">The relayer holds your claim and sends it the moment it can go, so you can leave Zapp now, or even turn your phone off. If the swap is called off instead, open Zapp again to bring your ZEC back.</string>
+    <string name="convert_held_short">The relayer has your claim: you can leave Zapp</string>
 
     <!-- Convert: results -->
     <string name="convert_result_paid_title">Dollars on their way</string>

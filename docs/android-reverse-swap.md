@@ -155,6 +155,14 @@ forward swaps set wake alarms: around `t0`, before `t1`, and at the end of the m
 while a swap unwinds. `AtomicSwapWakeReceiver` resumes both loops when woken, but its last-call
 notification is for forward swaps only.
 
+A forward swap hands its claim to the relayer once its deposit is out (`POST /v1/claim/hold`, kept
+as posted before it goes), and the relayer sends it the moment the claim's window opens: the user
+may leave the app then. The relayer holds the user's share until then, which the owner accepts
+(zecSwap's `docs/deployment.md`, Held claims). While the app runs, it claims itself only if nothing
+landed a minute after the window opened. A relayer that refuses the hand-over (`400`) or lacks the
+route (`404`) leaves the claim to the app, as before. A refund after a hand-over still needs the app
+to sweep the deposit home.
+
 ## Dependency
 
 The app needs `../zecSwap` at `88f8dfe`, whose Android wrapper and native libraries are the earlier

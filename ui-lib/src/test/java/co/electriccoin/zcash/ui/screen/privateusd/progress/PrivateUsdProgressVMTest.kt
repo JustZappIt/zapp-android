@@ -109,8 +109,22 @@ class PrivateUsdProgressVMTest {
             swap.value = confirming(t0 = now - 60)
             assertNull(vm.state.value.note)
 
+            // A payout signed to hand the claim over is no claim yet.
             swap.value = confirming(payout = PAYOUT)
+            assertEquals(R.string.convert_maker_silent, (vm.state.value.note as StringResource.ByResource).resource)
+
+            swap.value = confirming(payout = PAYOUT, claimPostedAt = now - 5)
             assertNull(vm.state.value.note)
+        }
+
+    @Test
+    fun `a claim the relayer holds says the user may leave, and that a refund would still need Zapp`() =
+        runTest {
+            val held = AtomicSwapStep.Waiting(AtomicSwapWait.CLAIM_HELD, t0 = now + 600, t1 = now + 1_200)
+            swap.value = confirming(payout = PAYOUT).copy(wait = held)
+            start()
+
+            assertEquals(stringRes(R.string.convert_claim_held), vm.state.value.note)
         }
 
     @Test
@@ -209,8 +223,9 @@ class PrivateUsdProgressVMTest {
         t0: Long = now + 600,
         problem: AtomicSwapProblem? = null,
         payout: SwapPayout? = null,
+        claimPostedAt: Long? = null,
     ) = AtomicSwapState(
-        record = record().copy(deposit = SwapDeposit.Kept(DEPOSIT), payout = payout),
+        record = record().copy(deposit = SwapDeposit.Kept(DEPOSIT), payout = payout, claimPostedAt = claimPostedAt),
         wait = AtomicSwapStep.Waiting(AtomicSwapWait.CONFIRMING, t0 = t0, t1 = t0 + 600),
         problem = problem,
         confirmations = AtomicSwapTestnet.deployment.makerConfirmations,

@@ -264,6 +264,12 @@ abstract class ReverseSwapDriverFixtures {
             ticket: String?
         ) = error("forward only")
 
+        override suspend fun holdClaim(
+            reveal: SwapReveal,
+            terms: SwapTerms,
+            ticket: String?
+        ) = error("forward only")
+
         override suspend fun payout(
             payout: SwapPayout,
             terms: SwapTerms,

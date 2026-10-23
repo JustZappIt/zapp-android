@@ -34,7 +34,12 @@ enum class AtomicSwapStage(
         // Unwinding, the ZEC comes back with the maker's refund, or the claim goes for good after its late window.
         private val COMING_BACK = setOf(AtomicSwapWait.REFUNDING, AtomicSwapWait.UNWINDING)
 
-        // The maker made the swap ready, or the relayer holds the claim as its window opens.
-        private val CLAIMS = setOf(AtomicSwapWait.READY_DEEPENING, AtomicSwapWait.CLAIM_HELD)
+        // The maker made the swap ready. One whose claim the relayer holds waits for confirmations, as it would.
+        private val CLAIMS = setOf(AtomicSwapWait.READY_DEEPENING)
     }
 }
+
+/** What the progress notification says of a forward swap: its stage, or once the relayer holds its claim, that. */
+@StringRes
+fun AtomicSwapState.progressText(): Int =
+    if (wait?.reason == AtomicSwapWait.CLAIM_HELD) R.string.convert_held_short else AtomicSwapStage.of(this).label

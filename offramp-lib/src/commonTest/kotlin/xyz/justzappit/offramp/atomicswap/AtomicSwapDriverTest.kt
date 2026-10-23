@@ -39,6 +39,8 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
                     "/v1/terms",
                     "/v1/quote/$QUOTE_ID/accept",
                     "/v1/terms",
+                    HOLD,
+                    "/v1/terms",
                     "/v1/claim",
                 ),
                 h.paths,
@@ -494,7 +496,11 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
             val record = h.depositedRecord()
 
             assertEquals(confirming(), h.driver.advance(record))
-            assertEquals(listOf("/v1/info", "/v1/quote", "/v1/terms", "/v1/quote/$QUOTE_ID/accept"), h.paths)
+            // The claim was handed over with the deposit, and this relayer has no route for it: nothing more is asked.
+            assertEquals(
+                listOf("/v1/info", "/v1/quote", "/v1/terms", "/v1/quote/$QUOTE_ID/accept", "/v1/terms", HOLD),
+                h.paths,
+            )
         }
 
     @Test

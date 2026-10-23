@@ -95,14 +95,14 @@ internal class PrivateUsdProgressSteps(
         now: Long,
         isSlowToOpen: Boolean
     ): StringResource? {
-        // Enough confirmations and no word from the maker, so no payout signed: the app claims by itself at t0.
+        // Enough confirmations and no word from the maker, so no claim yet: the app claims by itself at t0.
         val silentUntil =
             swap.wait
                 ?.t0
                 ?.takeIf {
                     swap.wait.reason == AtomicSwapWait.CONFIRMING &&
                         (swap.confirmations ?: 0) >= deployment.makerConfirmations &&
-                        swap.record?.payout == null
+                        swap.record?.claimPostedAt == null
                 }?.takeIf { it > now && swap.problem == null }
         return when {
             swap.resuming -> stringRes(R.string.convert_resuming)
@@ -110,6 +110,7 @@ internal class PrivateUsdProgressSteps(
             swap.wait?.reason == AtomicSwapWait.RETIRED -> stringRes(R.string.convert_retired)
             AtomicSwapStage.of(swap) == AtomicSwapStage.REFUNDING -> stringRes(R.string.convert_refunding)
             swap.wait?.reason == AtomicSwapWait.DEPOSIT_UNSETTLED -> stringRes(R.string.convert_unsettled)
+            swap.wait?.reason == AtomicSwapWait.CLAIM_HELD -> stringRes(R.string.convert_claim_held)
             isSlowToOpen -> stringRes(R.string.convert_opening_slow)
             silentUntil != null -> stringRes(R.string.convert_maker_silent, time(silentUntil))
             else -> null

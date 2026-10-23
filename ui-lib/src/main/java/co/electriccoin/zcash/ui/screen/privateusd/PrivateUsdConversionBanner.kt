@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowChevron
@@ -25,11 +26,13 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
+import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.stageLabel
+import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 
 /** The screen this conversion's progress shows on. */
@@ -58,13 +61,21 @@ internal fun PrivateUsdConversion.banner(onClick: () -> Unit): PrivateUsdConvers
             ),
         detail =
             when (this) {
-                is PrivateUsdConversion.ToUsd -> swap.stageDetail(confirmationsNeeded)
+                is PrivateUsdConversion.ToUsd -> swap.bannerDetail(confirmationsNeeded)
                 is PrivateUsdConversion.ToZec -> stringRes(record.phase.stageLabel())
             },
         isAttention = isAttention,
         onClick = onClick,
     )
 }
+
+// Once the relayer holds the claim, what matters is that the user may leave.
+private fun AtomicSwapState.bannerDetail(confirmationsNeeded: Int?): StringResource =
+    if (wait?.reason == AtomicSwapWait.CLAIM_HELD) {
+        stringRes(R.string.convert_held_short)
+    } else {
+        stageDetail(confirmationsNeeded)
+    }
 
 /** A conversion under way, one tap from its progress. */
 @Composable

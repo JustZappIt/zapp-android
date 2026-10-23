@@ -62,6 +62,13 @@ abstract class AtomicSwapDriverFixtures {
 
         /** The swap's record as the store keeps it when each claim reaches the relayer, refused or not. */
         val keptAtClaim = mutableListOf<AtomicSwapRecord?>()
+
+        /** How the relayer answers a claim handed over to hold: by default, as one without the route does. */
+        var holdStatus = HttpStatusCode.NotFound
+        var holdCode: String? = null
+
+        /** The swap's record as the store keeps it when each claim handed over reaches the relayer. */
+        val keptAtHold = mutableListOf<AtomicSwapRecord?>()
         private val engine =
             MockEngine { request ->
                 val path = request.url.encodedPath
@@ -71,18 +78,26 @@ abstract class AtomicSwapDriverFixtures {
                 bodies[path] = sent
                 if (path == unreachable) throw IOException("connection refused")
                 if (path == "/v1/claim") keptAtClaim += store.record
+                if (path == HOLD) keptAtHold += store.record
                 val fee = FEE_FIELD.find(sent)?.let { it.groupValues[1].toLong() }
                 val refused = fee != null && leastFee?.let { fee < it } == true
                 val status =
                     when {
                         path.endsWith("/accept") -> acceptStatus
                         refused -> HttpStatusCode.BadRequest
+                        path == HOLD -> holdStatus
                         else -> HttpStatusCode.OK
                     }
                 val body =
                     when {
                         status != HttpStatusCode.OK -> {
-                            val code = (if (refused) "rejected" else acceptCode)?.let { "\"code\":\"$it\"," }.orEmpty()
+                            val named =
+                                when {
+                                    refused -> "rejected"
+                                    path == HOLD -> holdCode
+                                    else -> acceptCode
+                                }
+                            val code = named?.let { "\"code\":\"$it\"," }.orEmpty()
                             """{$code"error":"${status.description}"}"""
                         }
 
@@ -116,6 +131,10 @@ abstract class AtomicSwapDriverFixtures {
                             chain.payoutFee = Usdc6.ofMicros(checkNotNull(fee))
                             feeAfterClaim?.let { relayerFee = it }
                             sent(if (claimPaysOut) 2 else 1)
+                        }
+
+                        path == HOLD -> {
+                            if (chain.stage == SwapStage.CLAIMED) sent(2) else """{"held":true}"""
                         }
 
                         path == "/v1/payout" -> {
@@ -405,6 +424,7 @@ abstract class AtomicSwapDriverFixtures {
         const val FEE_VALIDITY = 3_600L
         const val DEPOSIT_ZAT = 202_021L
         const val QUOTE_ID = "0x" + "22222222222222222222222222222222" + "22222222222222222222222222222222"
+        const val HOLD = "/v1/claim/hold"
         val MAKER = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5")
         val RELAYER = Address.parse("0x507d1d152025e9f6da7bc03b358acc247f07b4eb")
         val AUTH = Address.parse("0x4444444444444444444444444444444444444444")
