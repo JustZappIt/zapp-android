@@ -19,6 +19,7 @@ import {
 import LevelJS from 'level-js';
 import { groth16 } from 'snarkjs';
 import { artifactStore } from './artifacts.js';
+import { newDepositNote, openDepositNote } from './deposit-note.js';
 import { badRequest } from './errors.js';
 import { receivedSends } from './received.js';
 
@@ -128,6 +129,21 @@ export async function refresh(_params, emit) {
     emit('log', `screening not refreshed: ${error?.message ?? error}`);
   }
   return { balances: await balances(), received: await received(walletId, emit) };
+}
+
+/**
+ * A fresh note for a deposit to shield into the open wallet (deposit-note.js), opened again with the wallet's own
+ * viewing key before it leaves. The wallet needn't be synced.
+ */
+export async function depositNote() {
+  const { walletId, address } = session();
+  const engineWallet = walletForID(walletId);
+  if (engineWallet.getAddress() !== address) throw new Error("the engine's wallet isn't the one opened");
+  const { masterPublicKey } = engineWallet;
+  const { privateKey, pubkey } = engineWallet.getViewingKeyPair();
+  const note = await newDepositNote({ masterPublicKey, viewingPublicKey: pubkey });
+  await openDepositNote(note, { masterPublicKey, viewingPrivateKey: privateKey });
+  return note;
 }
 
 /** One notes scan at a time, so each can tell whether the engine ran it. */
