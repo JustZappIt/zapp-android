@@ -25,13 +25,15 @@ import kotlin.time.toJavaInstant
 
 private const val MINUTES_PER_HOUR = 60
 
-/** "about 5 min" or "about 1 h". */
+/** "about 5 min", "about 1 h" or "about 1 h 30 min". */
 internal fun Duration.about(): StringResource {
     val minutes = inWholeMinutes.coerceAtLeast(1)
-    return if (minutes < MINUTES_PER_HOUR) {
-        stringRes(R.string.private_usd_about_minutes, minutes.toInt())
-    } else {
-        stringRes(R.string.private_usd_about_hours, (minutes / MINUTES_PER_HOUR).toInt())
+    val hours = (minutes / MINUTES_PER_HOUR).toInt()
+    val past = (minutes % MINUTES_PER_HOUR).toInt()
+    return when {
+        hours == 0 -> stringRes(R.string.private_usd_about_minutes, past)
+        past == 0 -> stringRes(R.string.private_usd_about_hours, hours)
+        else -> stringRes(R.string.private_usd_about_hours_minutes, hours, past)
     }
 }
 

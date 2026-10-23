@@ -15,6 +15,7 @@ import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 object AtomicSwapMainnet {
     // The mainnet maker counts a deposit after 2 confirmations, with t0 90 minutes out and t1 an hour after it, and
@@ -80,6 +81,7 @@ object AtomicSwapMainnet {
                     railgunAddress = RailgunAddress(RELAYER_RAILGUN_ADDRESS),
                     feeToken = Ethereum.USDC,
                 ),
+            makerDeadlines = MakerDeadlines(t0 = 90.minutes, t1 = 150.minutes),
         )
 
     /** The mainnet beta's lock contract until 2026-10-22: its conversions are history, and nothing drives them. */

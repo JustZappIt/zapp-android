@@ -19,6 +19,7 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
+import co.electriccoin.zcash.ui.screen.privateusd.dateTime
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
 import co.electriccoin.zcash.ui.screen.privateusd.toUsd
 import io.mockk.coEvery
@@ -58,6 +59,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PrivateUsdProgressVMTest {
@@ -109,6 +111,32 @@ class PrivateUsdProgressVMTest {
 
             swap.value = confirming(payout = PAYOUT)
             assertNull(vm.state.value.note)
+        }
+
+    @Test
+    fun `a swap unwinding says its ZEC comes back from t1, or the claim goes once the maker's late window is over`() =
+        runTest {
+            val t1 = now + 60
+            val unwinding = AtomicSwapStep.Waiting(AtomicSwapWait.UNWINDING, t0 = now - 3_600, t1)
+            swap.value = confirming().copy(wait = unwinding)
+            start()
+
+            val note = vm.state.value.note as StringResource.ByResource
+            assertEquals(R.string.convert_unwinding, note.resource)
+            val late = checkNotNull(AtomicSwapTestnet.deployment.swap.windows).late
+            assertEquals(
+                listOf(dateTime(Instant.fromEpochSeconds(t1)), dateTime(Instant.fromEpochSeconds(t1 + late))),
+                note.args,
+            )
+        }
+
+    @Test
+    fun `a swap on a retired contract says only its maker's refund brings the ZEC home`() =
+        runTest {
+            swap.value = confirming().copy(wait = AtomicSwapStep.Waiting(AtomicSwapWait.RETIRED))
+            start()
+
+            assertEquals(R.string.convert_retired, (vm.state.value.note as StringResource.ByResource).resource)
         }
 
     @Test

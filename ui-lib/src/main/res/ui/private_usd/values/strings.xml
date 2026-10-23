@@ -185,6 +185,10 @@
     <!-- Conversions on the windows contract -->
     <string name="private_usd_token_retired_test_usd">Retired test dollar</string>
     <string name="convert_problem_retired">This conversion is on the conversion contract Zapp used before, which it no longer settles. Your funds are safe there: contact Zapp support to get them back.</string>
+    <string name="convert_review_info_quiet">If the market maker never confirms your deposit, Zapp claims your dollars from %1$s after you convert. If nothing has happened %2$s after you convert, your ZEC comes back, or Zapp can still claim the dollars %3$s after that.</string>
+    <string name="convert_unwinding">It\'s too late to claim your dollars before %1$s, so the market maker can call the swap off now, and Zapp then brings your ZEC back. If it hasn\'t by %2$s, Zapp claims your dollars instead.</string>
+    <string name="convert_retired">This conversion is on the conversion contract Zapp used before, which it no longer settles. If the market maker calls the swap off, Zapp brings your ZEC back to your wallet.</string>
+    <string name="private_usd_about_hours_minutes">about %1$d h %2$d min</string>
 
     <!-- Convert: results -->
     <string name="convert_result_paid_title">Dollars on their way</string>
@@ -295,7 +299,7 @@
     <string name="reverse_broadcaster_fee">Broadcast fee</string>
     <string name="reverse_total">Total paid</string>
     <string name="reverse_receive_estimate">Estimated ZEC after sweep fee</string>
-    <string name="reverse_refund_note" tools:ignore="MissingTranslation">Before settlement authorization, you can cancel. Afterwards, refunds wait for the contract deadline and lock. A refund pays the relayer\'s fee for its gas, plus Railgun shielding fees. Closing the app never authorizes settlement.</string>
+    <string name="reverse_refund_note">Before you authorize settlement, you can cancel. Afterwards, a refund waits until the settlement you authorized can no longer go through: a few minutes if it never starts, or until the conversion\'s deadline if it does. A refund pays the relayer\'s fee for its gas, plus Railgun\'s shielding fee. Closing the app never authorizes settlement.</string>
     <string name="reverse_insufficient">Not enough Private USD for this amount and its fees.</string>
     <string name="reverse_title_description" tools:ignore="MissingTranslation">Private USD to ZEC</string>
     <string name="reverse_error_max" tools:ignore="MissingTranslation">Couldn\'t work out the most you can convert. Try again in a moment.</string>

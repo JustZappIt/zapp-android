@@ -82,6 +82,7 @@ object AtomicSwapTestnet {
                     railgunAddress = RailgunAddress(RELAYER_RAILGUN_ADDRESS),
                     feeToken = Sepolia.TEST_USD,
                 ),
+            makerDeadlines = MakerDeadlines(t0 = 45.minutes, t1 = 105.minutes),
         )
 
     /** The lock contract until 2026-10-21, and its test dollar: its conversions are history, never driven. */

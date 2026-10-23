@@ -20,9 +20,11 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByQuantity
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.about
+import co.electriccoin.zcash.ui.screen.privateusd.dateTime
 import co.electriccoin.zcash.ui.screen.privateusd.joinDetail
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
+import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.NothingSentCause
 import xyz.justzappit.offramp.atomicswap.RefundCause
@@ -104,11 +106,28 @@ internal class PrivateUsdProgressSteps(
                 }?.takeIf { it > now && swap.problem == null }
         return when {
             swap.resuming -> stringRes(R.string.convert_resuming)
+            swap.wait?.reason == AtomicSwapWait.UNWINDING -> unwinding(swap.wait)
+            swap.wait?.reason == AtomicSwapWait.RETIRED -> stringRes(R.string.convert_retired)
             AtomicSwapStage.of(swap) == AtomicSwapStage.REFUNDING -> stringRes(R.string.convert_refunding)
             swap.wait?.reason == AtomicSwapWait.DEPOSIT_UNSETTLED -> stringRes(R.string.convert_unsettled)
             isSlowToOpen -> stringRes(R.string.convert_opening_slow)
             silentUntil != null -> stringRes(R.string.convert_maker_silent, time(silentUntil))
             else -> null
+        }
+    }
+
+    // Too late to claim before t1: the maker returns the ZEC in its late window, or the claim goes for good after it.
+    private fun unwinding(wait: AtomicSwapStep.Waiting?): StringResource? {
+        val t1 = wait?.t1
+        val late = deployment.swap.windows?.late
+        return if (t1 == null || late == null) {
+            null
+        } else {
+            stringRes(
+                R.string.convert_unwinding,
+                dateTime(kotlin.time.Instant.fromEpochSeconds(t1)),
+                dateTime(kotlin.time.Instant.fromEpochSeconds(t1 + late)),
+            )
         }
     }
 
