@@ -7,6 +7,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
+import co.electriccoin.zcash.ui.common.provider.lastSyncedBalances
 import co.electriccoin.zcash.ui.common.repository.WalletRepository
 import co.electriccoin.zcash.ui.screen.ironwood.IronwoodActivation
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -57,6 +58,9 @@ class WalletViewModel(
      * a wallet with only dust-level residual Orchard balance (e.g. a previously locked residue)
      * used to re-trigger this full-screen announcement on every re-import — a bare `> 0L` check
      * doesn't distinguish that from a genuinely unmigrated balance worth announcing.
+     *
+     * The balance is the one from the wallet's last sync ([lastSyncedBalances]): while a sync scans
+     * an account a conversion just imported, the SDK reports Ironwood funds as Orchard.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val shouldShowIronwoodAnnouncement: StateFlow<Boolean> =
@@ -67,7 +71,7 @@ class WalletViewModel(
                 } else {
                     combine(
                         synchronizer.fullyScannedHeight,
-                        synchronizerProvider.walletBalances,
+                        lastSyncedBalances(synchronizerProvider.walletBalances, synchronizer.status),
                         walletRepository.isIronwoodAnnouncementShown,
                     ) { scannedHeight, balances, isShown ->
                         val activationHeight = IronwoodActivation.heightFor(synchronizer.network)
