@@ -249,6 +249,7 @@
     <string name="refunds_deposit_recover">Recuperar depósito</string>
     <string name="refunds_deposit_recovering">Recuperando tu depósito…</string>
     <string name="refunds_deposit_recover_failed">No se pudo recuperar este depósito. Vuelve a intentarlo.</string>
+    <string name="private_usd_send_own_deposit_address">Es una de tus propias direcciones de depósito. Retirar a ella para volver a protegerlo cuesta el %1$s%% de Railgun en cada sentido, y hace público el importe.</string>
 
     <string name="private_usd_channel_progress">Conversiones de USD protegido</string>
     <string name="private_usd_channel_progress_description">Se muestra mientras se realiza una conversión.</string>

@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendCost
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendOutcome
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRequest
@@ -65,6 +66,7 @@ class PrivateUsdSendVM(
     private val secretAuthGate: SecretAuthGate,
     private val navigationRouter: NavigationRouter,
     private val spendGuard: PrivateUsdSpendGuard,
+    depositsRepository: PrivateUsdDepositsRepository,
 ) : ViewModel() {
     private val sender = checkNotNull(senders.current) { "no sending in this build" }
     private val explorerTxUrl = atomicSwapRepository.deployment?.explorerTxUrl
@@ -85,6 +87,13 @@ class PrivateUsdSendVM(
         viewModelScope.launch {
             runConversionStep("no minimum send fee") { sender.minNetworkFee() }.onSuccess { fee ->
                 form.update { it.copy(networkFee = it.networkFee?.copy(minimum = fee)) }
+            }
+        }
+        // A withdrawal to one of the wallet's own deposit addresses would only be shielded again, at a fee each way.
+        if (args.mode == PrivateUsdSendMode.WITHDRAW) {
+            viewModelScope.launch {
+                runConversionStep("no deposit addresses to refuse") { depositsRepository.ownAddresses() }
+                    .onSuccess { own -> form.update { it.copy(ownDeposits = own) } }
             }
         }
     }

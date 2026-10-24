@@ -267,6 +267,7 @@
     <string name="refunds_deposit_recover">Recover deposit</string>
     <string name="refunds_deposit_recovering">Recovering your deposit…</string>
     <string name="refunds_deposit_recover_failed">Couldn\'t recover this deposit. Try again.</string>
+    <string name="private_usd_send_own_deposit_address">That\'s one of your own deposit addresses. Withdrawing to it to shield it again costs Railgun\'s %1$s%% each way, and makes the amount public.</string>
 
     <!-- Notifications -->
     <string name="private_usd_channel_progress">Shielded USD conversions</string>
