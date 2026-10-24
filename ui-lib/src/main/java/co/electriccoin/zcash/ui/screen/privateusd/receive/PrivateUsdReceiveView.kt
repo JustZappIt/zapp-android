@@ -3,130 +3,182 @@
 
 package co.electriccoin.zcash.ui.screen.privateusd.receive
 
-import androidx.compose.foundation.BorderStroke
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.design.component.QrCodeDefaults
-import co.electriccoin.zcash.ui.design.component.QrState
-import co.electriccoin.zcash.ui.design.component.ZashiQr
-import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyableAddress
-import co.electriccoin.zcash.ui.design.component.zapp.ZappSegment
-import co.electriccoin.zcash.ui.design.component.zapp.ZappSegmentedSelector
+import co.electriccoin.zcash.ui.design.component.zapp.ZappAddressCopyRow
+import co.electriccoin.zcash.ui.design.component.zapp.ZappInfoButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappInfoSheet
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedger
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedgerRow
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
-import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdScaffold
+import co.electriccoin.zcash.ui.design.util.styledStringResource
+import co.electriccoin.zcash.ui.screen.receive.ReceiveBottomDock
+import co.electriccoin.zcash.ui.screen.receive.ReceiveQrFrame
+import co.electriccoin.zcash.ui.screen.receive.ReceiveShareButton
+import co.electriccoin.zcash.ui.screen.receive.ReceiveTabSwitcher
+import co.electriccoin.zcash.ui.screen.receive.ReceiveTip
+import co.electriccoin.zcash.ui.design.R as DesignR
 
+/** Laid out as receiving ZEC is: the code and address, the tabs below, Share, and back beside the one action. */
 @Composable
 internal fun PrivateUsdReceiveView(state: PrivateUsdReceiveState) {
-    PrivateUsdScaffold(
-        title = stringResource(R.string.private_usd_receive_title),
-        info = state.info,
-        onBack = state.onBack,
+    var showsInfo by rememberSaveable { mutableStateOf(false) }
+    val usd = state.usd?.takeIf { state.tab == PrivateUsdReceiveTab.USD }
+    val address = usd?.address ?: state.shielded.address
+    val copyLabel = if (address.isCopied) R.string.private_usd_receive_copied else R.string.private_usd_receive_copy
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(ZappTheme.colors.bg)
+                .windowInsetsPadding(WindowInsets.statusBars),
     ) {
-        val usd = state.usd
-        if (usd != null) {
-            ZappSegmentedSelector(
-                segments =
+        ZappScreenHeader(
+            title = stringResource(R.string.private_usd_receive_title),
+            right = {
+                ZappInfoButton(
+                    contentDescription = stringResource(R.string.private_usd_info_content_description),
+                    onClick = { showsInfo = true },
+                )
+            },
+        )
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(Modifier.height(20.dp))
+            if (usd != null) Usd(usd) else Shielded(state.shielded)
+            Spacer(Modifier.height(16.dp))
+        }
+        if (state.usd != null) {
+            ReceiveTabSwitcher(
+                labels =
                     listOf(
-                        ZappSegment(stringResource(R.string.private_usd_receive_tab_usd)),
-                        ZappSegment(stringResource(R.string.private_usd_receive_tab_shielded)),
+                        stringResource(R.string.private_usd_receive_tab_usd),
+                        stringResource(R.string.private_usd_receive_tab_shielded),
                     ),
                 selectedIndex = state.tab.ordinal,
                 onSelect = { state.onSelectTab(PrivateUsdReceiveTab.entries[it]) },
             )
         }
-        if (usd != null && state.tab == PrivateUsdReceiveTab.USD) {
-            Usd(usd)
-        } else {
-            Shielded(state.shielded)
-        }
+        ReceiveShareButton(
+            address = address.value,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp)
+                    .padding(bottom = 8.dp),
+        )
+        ReceiveBottomDock(
+            onBack = state.onBack,
+            action = stringResource(copyLabel),
+            onAction = address.onCopy,
+            isActionEnabled = address.value != null,
+        )
+    }
+    if (showsInfo) {
+        ZappInfoSheet(
+            title = state.info.title.getValue(),
+            steps = state.info.steps.map { it.getValue() },
+            notes = state.info.notes.map { it.getValue() },
+            onDismiss = { showsInfo = false },
+            titleDescription = state.info.titleDescription?.getValue(),
+        )
     }
 }
 
 @Composable
 private fun Shielded(state: PrivateUsdReceiveShieldedState) {
-    Notice(state.notice, isDanger = false)
-    Address(state.address)
+    Address(state.address, centerImage = R.drawable.ic_private_usd_badge)
+    ReceiveTip(label = stringResource(R.string.receive_tip_label), text = state.notice.getValue())
+    Spacer(Modifier.height(12.dp))
     Caption(state.note)
 }
 
 @Composable
 private fun Usd(state: PrivateUsdReceiveUsdState) {
     // Another token, or this one on another network, is lost: it's read before the address.
-    Notice(state.notice, isDanger = true)
-    Address(state.address)
-    if (state.lines.isNotEmpty()) {
-        Column(
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm),
-        ) {
-            state.lines.forEach { Line(it) }
+    ReceiveTip(
+        label = stringResource(R.string.private_usd_receive_warning_label),
+        text = state.notice.getValue(),
+        isWarning = true,
+    )
+    Spacer(Modifier.height(20.dp))
+    Address(state.address, centerImage = DesignR.drawable.ic_token_usdc)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xl),
+    ) {
+        if (state.lines.isNotEmpty()) {
+            Column(
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm),
+            ) {
+                state.lines.forEach { Line(it) }
+            }
         }
-    }
-    state.fees?.let { Fees(it) }
-    state.feesStatus?.let { Caption(it) }
-    Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
-        state.notes.forEach { Caption(it) }
+        state.fees?.let { Fees(it) }
+        state.feesStatus?.let { Caption(it) }
+        Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
+            state.notes.forEach { Caption(it) }
+        }
     }
 }
 
-/** A code of the plain address over the address itself, shown whole: an abridged one is what lookalikes rely on. */
+/** The code of the plain address over the address itself, shown whole: an abridged one is what lookalikes rely on. */
 @Composable
-private fun Address(address: PrivateUsdReceiveAddressState) {
+private fun Address(
+    address: PrivateUsdReceiveAddressState,
+    @DrawableRes centerImage: Int,
+) {
     val value = address.value
     if (value == null) {
         address.status?.let { Caption(it) }
-        return
+    } else {
+        ReceiveQrFrame(qrData = value, centerImage = centerImage, contentDescription = address.qrDescription)
+        Spacer(Modifier.height(20.dp))
+        ZappAddressCopyRow(
+            address = styledStringResource(value),
+            copyContentDescription = address.copyDescription.getValue(),
+            onCopy = address.onCopy,
+            label = address.label.getValue(),
+        )
     }
-    val c = ZappTheme.colors
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Box(
-            modifier =
-                Modifier
-                    .background(c.bg, RectangleShape)
-                    .border(BorderStroke(1.dp, c.border), RectangleShape)
-                    .padding(ZappTheme.spacing.lg),
-        ) {
-            ZashiQr(
-                state = QrState(qrData = value, contentDescription = address.qrDescription),
-                colors = QrCodeDefaults.colors(border = Color.Unspecified),
-            )
-        }
-    }
-    ZappCopyableAddress(
-        label = address.label.getValue(),
-        address = value,
-        copyContentDescription = address.copyDescription.getValue(),
-        onCopy = address.onCopy,
-        isCopied = address.isCopied,
-        maxLines = Int.MAX_VALUE,
-    )
+    Spacer(Modifier.height(20.dp))
 }
 
 @Composable
@@ -168,42 +220,6 @@ private fun Line(line: PrivateUsdReceiveLineState) {
     )
 }
 
-/** What must be read before sending, set off by a bar down its side. */
-@Composable
-private fun Notice(
-    text: StringResource,
-    isDanger: Boolean,
-) {
-    val c = ZappTheme.colors
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .background(if (isDanger) c.dangerSoft else c.accentSoft, RectangleShape),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .width(NOTICE_BAR_WIDTH)
-                    .fillMaxHeight()
-                    .background(if (isDanger) c.danger else c.accent, RectangleShape),
-        )
-        BasicText(
-            text = text.getValue(),
-            style =
-                ZappTheme.typography.caption.copy(
-                    color = if (isDanger) c.danger else c.accentText,
-                    fontWeight = FontWeight.Medium,
-                ),
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .padding(horizontal = ZappTheme.spacing.lg, vertical = ZappTheme.spacing.md),
-        )
-    }
-}
-
 @Composable
 private fun Caption(text: StringResource) {
     BasicText(
@@ -211,5 +227,3 @@ private fun Caption(text: StringResource) {
         style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
     )
 }
-
-private val NOTICE_BAR_WIDTH = 3.dp

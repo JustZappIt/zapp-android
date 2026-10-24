@@ -65,6 +65,9 @@
     <string name="private_usd_receive_title">Receive</string>
     <string name="private_usd_receive_tab_usd">USD</string>
     <string name="private_usd_receive_tab_shielded">Shielded USD</string>
+    <string name="private_usd_receive_warning_label">IMPORTANT</string>
+    <string name="private_usd_receive_copy">Copy address</string>
+    <string name="private_usd_receive_copied">Copied</string>
     <string name="private_usd_receive_info_title">Receiving shielded USD</string>
     <string name="private_usd_receive_info_usd">USD — public %1$s from an exchange or any wallet goes to your deposit address, and Zapp shields it on its own for a small fee.</string>
     <string name="private_usd_receive_info_shielded">Shielded USD — another Railgun wallet sends straight to your Railgun address, privately and with no fee.</string>

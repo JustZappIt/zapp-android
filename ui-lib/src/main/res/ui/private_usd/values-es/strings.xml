@@ -96,6 +96,9 @@
     <string name="private_usd_receive_title">Recibir</string>
     <string name="private_usd_receive_tab_usd">USD</string>
     <string name="private_usd_receive_tab_shielded">USD protegido</string>
+    <string name="private_usd_receive_warning_label">IMPORTANTE</string>
+    <string name="private_usd_receive_copy">Copiar dirección</string>
+    <string name="private_usd_receive_copied">Copiada</string>
     <string name="private_usd_receive_info_title">Recibir USD protegido</string>
     <string name="private_usd_receive_info_usd">USD — los %1$s públicos de un exchange o de cualquier billetera llegan a tu dirección de depósito, y Zapp los protege por sí solo por una pequeña comisión.</string>
     <string name="private_usd_receive_info_shielded">USD protegido — otra billetera de Railgun envía directamente a tu dirección de Railgun, de forma privada y sin comisión.</string>
