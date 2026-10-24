@@ -26,49 +26,56 @@ import xyz.justzappit.offramp.atomicswap.SwapTokens
 import xyz.justzappit.offramp.atomicswap.TokenChallenge
 
 /** The makers' Privacy Pass tokens, one supply per pinned issuer, fetched over Tor only. */
-class AtomicSwapTokens(
+class AtomicSwapTokens internal constructor(
     private val deployments: AtomicSwapDeployments,
-    private val httpClientProvider: HttpClientProvider,
     private val store: SwapTokenStore,
-    private val scope: CoroutineScope = swapScope(),
+    private val scope: CoroutineScope,
+    private val newSupply: (SwapTokenIssuer) -> SwapTokens,
 ) {
+    constructor(
+        deployments: AtomicSwapDeployments,
+        httpClientProvider: HttpClientProvider,
+        store: SwapTokenStore,
+        scope: CoroutineScope = swapScope(),
+    ) : this(deployments, store, scope, { issuer -> torSupply(issuer, httpClientProvider, store) })
+
     private val supplies = mutableMapOf<SwapTokenIssuer, SwapTokens>()
 
     fun source(issuer: SwapTokenIssuer): SwapTokens =
         synchronized(supplies) {
-            supplies.getOrPut(issuer) {
-                SwapTokens(issuer, ::torClient, PrivacyPassTokens, AtomicSwapAttestation(issuer.name), store)
-            }
+            supplies.getOrPut(issuer) { newSupply(issuer) }
         }
 
-    // The SDK offers a Tor client only while Tor or exchange rates are on.
-    private suspend fun torClient(): HttpClient =
-        try {
-            httpClientProvider.createTor()
-        } catch (e: TorUnavailableException) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_NEED_TOR, "Tor is off", e)
-        }
-
-    /** Fetches the current deployment's tokens ahead, as a quote is asked for and as a conversion ends. */
+    /**
+     * Fetches the current deployment's tokens ahead, as a quote is asked for and as a conversion ends, unless the
+     * issuer refused this device when last asked. Quotes go ahead either way: the issuer is asked again only once a
+     * maker wants a token for an accept, so a maker that takes accepts without one converts on any phone.
+     */
     fun prefetch() {
         val issuer = deployments.current?.swap?.tokenIssuer ?: return
         scope.launch {
             try {
-                source(issuer).prefetch()
+                if (store.load().refusedBy != issuer.name) source(issuer).prefetch()
             } catch (e: AtomicSwapBlockedException) {
                 Twig.info { "Atomic swap: no tokens fetched ahead, ${e.message}" }
             }
         }
     }
-
-    /** Throws if the current issuer refused this device when last asked; a fetch under way isn't waited for. */
-    suspend fun requireNotRefused() {
-        val issuer = deployments.current?.swap?.tokenIssuer ?: return
-        if (store.load().refusedBy == issuer.name) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_DEVICE_REFUSED, "the issuer refused this device")
-        }
-    }
 }
+
+private fun torSupply(
+    issuer: SwapTokenIssuer,
+    httpClientProvider: HttpClientProvider,
+    store: SwapTokenStore,
+) = SwapTokens(issuer, { torClient(httpClientProvider) }, PrivacyPassTokens, AtomicSwapAttestation(issuer.name), store)
+
+// The SDK offers a Tor client only while Tor or exchange rates are on.
+private suspend fun torClient(httpClientProvider: HttpClientProvider): HttpClient =
+    try {
+        httpClientProvider.createTor()
+    } catch (e: TorUnavailableException) {
+        throw AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_NEED_TOR, "Tor is off", e)
+    }
 
 /** The tokens held for the next conversions, encrypted; an unreadable store starts over with none. */
 class SwapTokenStoreImpl(
