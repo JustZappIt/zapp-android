@@ -653,7 +653,7 @@ private fun lastWord(code: SwapErrorCode): AtomicSwapBlockedException? =
             AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "the maker refused the quote's acceptance")
         }
 
-        SwapErrorCode.INTERNAL, SwapErrorCode.ALREADY_SPENT -> {
+        SwapErrorCode.INTERNAL, SwapErrorCode.ALREADY_SPENT, SwapErrorCode.CONFLICT -> {
             null
         }
     }

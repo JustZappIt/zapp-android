@@ -8,6 +8,7 @@ package xyz.justzappit.offramp.atomicswap
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.json.JsonElement
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.TxHash
@@ -100,6 +101,11 @@ data class RelayerTerms(
     val contractKind: String? = null,
     val minWindow: Long? = null,
     val lateWindow: Long? = null,
+    /**
+     * Present when the relayer shields public tokens sent to wallets' deposit addresses, as it sent them: terms that
+     * don't read take no deposits, and leave the rest of these readable (`xyz.justzappit.offramp.deposits`).
+     */
+    val deposits: JsonElement? = null,
 )
 
 /** How the relayer sends a wallet's Railgun transaction: it pays the gas for a fee note to [railgunAddress]. */

@@ -74,7 +74,14 @@ enum class SwapErrorCode {
 
     /** Spend a token from the issuer the `WWW-Authenticate` challenge names. */
     @SerialName("tokenRequired")
-    TOKEN_REQUIRED;
+    TOKEN_REQUIRED,
+
+    /**
+     * A deposit's authorization is used, or another deposit of the same address is on its way: the answer names the
+     * relayer's own transactions that do it, or none where it doesn't know one.
+     */
+    @SerialName("conflict")
+    CONFLICT;
 
     companion object {
         /** The code a service named, or null for one this build doesn't know. */

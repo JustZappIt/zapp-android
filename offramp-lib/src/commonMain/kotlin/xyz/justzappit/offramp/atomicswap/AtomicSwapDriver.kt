@@ -264,8 +264,9 @@ class AtomicSwapDriver(
 
                 SwapErrorCode.UNKNOWN_SWAP, SwapErrorCode.INTERNAL -> null
 
-                // A relayer's answer to a Railgun send, which no maker gives: read as a code this build doesn't know.
-                SwapErrorCode.ALREADY_SPENT, null -> refusal(refused.status)
+                // A relayer's answers to a Railgun send or a deposit, which no maker gives: read as a code this build
+                // doesn't know.
+                SwapErrorCode.ALREADY_SPENT, SwapErrorCode.CONFLICT, null -> refusal(refused.status)
             }
 
         fun refusal(status: Int): NothingSentCause? =
