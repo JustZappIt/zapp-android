@@ -19,11 +19,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.evm.util.hexToBytes
 import java.math.BigInteger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /** Every call the page answers, and how long it may take; its side is `railgun-lib/web/src/index.js`. */
 @Serializable
@@ -40,6 +43,9 @@ internal enum class RailgunMethod(
     // until it's done; a timeout closes the page, which starts it over.
     @SerialName("refresh")
     REFRESH(2.hours),
+
+    @SerialName("depositNote")
+    DEPOSIT_NOTE(1.minutes),
 
     @SerialName("transfer")
     TRANSFER(10.minutes),
@@ -87,6 +93,51 @@ internal data class WireTokenAmount(
     @Serializable(with = DecimalSerializer::class)
     val amount: BigInteger,
 )
+
+@Serializable
+internal data class RefreshResult(
+    val balances: Map<String, List<WireTokenAmount>>,
+    /** Each entry is read on its own, so one this build can't read never fails the balances. */
+    val received: JsonElement? = null,
+)
+
+/** As `web/src/received.js` writes it. */
+@Serializable
+internal data class WireReceivedSend(
+    val txid: String,
+    val token: Address,
+    @Serializable(with = DecimalSerializer::class)
+    val amount: BigInteger,
+    val bucket: String? = null,
+    val timestamp: Long? = null,
+    val sender: String? = null,
+) {
+    fun toReceivedSend() =
+        RailgunReceivedSend(
+            txid = TxHash.fromHex(txid),
+            token = token,
+            amount = amount,
+            bucket = RailgunBalanceBucket.entries.firstOrNull { it.wireName == bucket },
+            blockTime = timestamp?.takeIf { it > 0 }?.let(Instant::fromEpochSeconds),
+            sender = sender?.let(RailgunAddress::parseOrNull),
+        )
+}
+
+/** As `web/src/deposit-note.js` writes it, each word `0x` hex. Not a data class: a note never reaches a log. */
+@Serializable
+internal class WireDepositNote(
+    val npk: String,
+    val encryptedBundle: List<String>,
+    val shieldKey: String,
+) {
+    fun toNote(receiver: RailgunAddress): RailgunDepositNote =
+        try {
+            val bundle = encryptedBundle.map { it.hexToBytes() }
+            RailgunDepositNote(receiver, npk.hexToBytes(), bundle, shieldKey.hexToBytes())
+        } catch (e: IllegalArgumentException) {
+            throw RailgunException.Protocol("the page's deposit note isn't five 32-byte words", e)
+        }
+}
 
 @Serializable
 internal data class TransferParams(

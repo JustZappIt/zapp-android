@@ -7,11 +7,13 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendCost
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
+import co.electriccoin.zcash.ui.common.privateusd.basisPoints
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByQuantity
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.atomicswap.RAILGUN_FEE
 import xyz.justzappit.railgun.RailgunDestination
 import xyz.justzappit.railgun.RailgunNetwork
 import java.math.BigDecimal
@@ -58,6 +60,25 @@ class PrivateUsdSendFormTest {
 
         assertNull(zero.request(asset))
         assertEquals(stringRes(R.string.private_usd_send_zero_address), zero.recipientError())
+    }
+
+    @Test
+    fun `nothing is withdrawn to the wallet's own deposit addresses, in either case, which says why`() {
+        val own = setOf(Address.parse(CHECKSUMMED_0X))
+
+        for (recipient in listOf(LOWERCASE_0X, CHECKSUMMED_0X, " $CHECKSUMMED_0X ")) {
+            val withdrawal = form(PrivateUsdSendMode.WITHDRAW, recipient).copy(ownDeposits = own)
+            assertNull(withdrawal.request(asset), recipient)
+            assertEquals(
+                stringRes(R.string.private_usd_send_own_deposit_address, basisPoints(RAILGUN_FEE)),
+                withdrawal.recipientError(),
+            )
+        }
+        // A private send names a 0zk address, never a deposit address; other public addresses go as before.
+        assertNotNull(form(PrivateUsdSendMode.PRIVATE, ZERO_K).copy(ownDeposits = own).request(asset))
+        val other = form(PrivateUsdSendMode.WITHDRAW, OTHER_0X).copy(ownDeposits = own)
+        assertNotNull(other.request(asset))
+        assertNull(other.recipientError())
     }
 
     @Test
@@ -142,5 +163,6 @@ class PrivateUsdSendFormTest {
         const val LOWERCASE_0X = "0x09ed1f966745be18c711c346242c0974dad7c3e5"
         const val CHECKSUMMED_0X = "0x09eD1F966745Be18C711C346242c0974DAd7c3e5"
         const val MISTYPED_0X = "0x09Ed1F966745Be18C711C346242c0974DAd7c3e5"
+        const val OTHER_0X = "0x1c7f9a756b08753cf8da94d394659134bb8c5539"
     }
 }

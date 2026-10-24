@@ -19,6 +19,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByQuantity
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.atomicswap.RAILGUN_FEE
 import xyz.justzappit.offramp.peer.Bps
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunDestination
@@ -51,7 +52,18 @@ internal data class PrivateUsdSendForm(
     val error: StringResource? = null,
     /** What a send of the fee's token leaves in the balance for the broadcaster. */
     val networkFee: PrivateUsdNetworkFee? = null,
+    /**
+     * The wallet's own deposit addresses, which a withdrawal refuses: what's sent to one is shielded again, paying
+     * Railgun's fee each way, and both amounts are public.
+     */
+    val ownDeposits: Set<Address> = emptySet(),
 ) {
+    /** The recipient is one of the wallet's own deposit addresses. */
+    private val isOwnDeposit: Boolean
+        get() =
+            mode == PrivateUsdSendMode.WITHDRAW &&
+                publicAddress(recipient.trim())?.let { it in ownDeposits } == true
+
     /** The dollars there are to send, and the one this form is pinned to even once none of it is left. */
     fun assets(balance: PrivateUsdBalanceState): List<PrivateUsdAsset> {
         val pinned = reviewedRequest?.token ?: token
@@ -75,7 +87,7 @@ internal data class PrivateUsdSendForm(
     fun request(asset: PrivateUsdAsset): PrivateUsdSendRequest? {
         val sendable = networkFee?.sendable(asset) ?: asset.available
         val units = units(asset.token)?.takeIf { it.signum() > 0 && it <= sendable }
-        val to = destination(mode, recipient)
+        val to = destination(mode, recipient)?.takeUnless { isOwnDeposit }
         return if (units != null && to != null) PrivateUsdSendRequest(asset.token, units, to) else null
     }
 
@@ -120,7 +132,15 @@ internal data class PrivateUsdSendForm(
     fun recipientError(): StringResource? {
         val input = recipient.trim()
         return when {
-            input.isEmpty() || destination(mode, input) != null -> {
+            input.isEmpty() -> {
+                null
+            }
+
+            isOwnDeposit -> {
+                stringRes(R.string.private_usd_send_own_deposit_address, basisPoints(RAILGUN_FEE))
+            }
+
+            destination(mode, input) != null -> {
                 null
             }
 

@@ -164,17 +164,26 @@ class AtomicSwapSessions(
         const val CLOSED = -1L
 
         // Forward swaps keep the deployment they were accepted on, found again from their quote. Indices are checked
-        // against these alone: a contract users swapped on stays, or a restored wallet reuses secrets published there.
-        private val KNOWN = listOf(AtomicSwapTestnet.deployment, AtomicSwapMainnet.deployment)
+        // against these alone: a contract users swapped on stays, retired or not, or a restored wallet reuses secrets
+        // published there.
+        private val KNOWN =
+            listOf(
+                AtomicSwapTestnet.deployment,
+                AtomicSwapTestnet.retired,
+                AtomicSwapMainnet.deployment,
+                AtomicSwapMainnet.retired,
+            )
 
         fun deploymentFor(record: AtomicSwapRecord): AtomicSwapDeployment =
-            checkNotNull(
-                KNOWN.firstOrNull {
-                    it.swap.chainId == record.quote.chainId &&
-                        it.swap.contract == record.quote.contract &&
-                        it.swap.token == record.quote.token
-                },
-            ) { "unknown original swap deployment" }
+            checkNotNull(knownDeploymentOf(record)) { "unknown original swap deployment" }
+
+        /** The deployment [record] was accepted on, or null for one this build doesn't know. */
+        fun knownDeploymentOf(record: AtomicSwapRecord): AtomicSwapDeployment? =
+            KNOWN.firstOrNull {
+                it.swap.chainId == record.quote.chainId &&
+                    it.swap.contract == record.quote.contract &&
+                    it.swap.token == record.quote.token
+            }
 
         /** The deployments whose contracts can hold secrets of keys derived on [network]: keys differ by network. */
         internal fun indexedOn(network: SwapZcashNetwork?): List<AtomicSwapDeployment> =

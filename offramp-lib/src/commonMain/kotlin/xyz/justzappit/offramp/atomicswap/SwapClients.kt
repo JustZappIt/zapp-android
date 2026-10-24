@@ -18,6 +18,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.delay
 import kotlinx.io.IOException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -79,17 +80,22 @@ interface SwapRelayer {
         ticket: String?
     ): Sent
 
-    suspend fun lockClaim(
-        authorization: SwapAuthorization,
-        terms: SwapTerms,
-        ticket: String?
-    ): Sent
-
     suspend fun claim(
         reveal: SwapReveal,
         terms: SwapTerms,
         ticket: String?
     ): Sent
+
+    /**
+     * Hands over the claim [claim] takes before its window opens, for the relayer to keep and send the moment it does:
+     * returns once held, or for a swap claimed already. A refusal holds nothing; a relayer without the route answers
+     * `404`.
+     */
+    suspend fun holdClaim(
+        reveal: SwapReveal,
+        terms: SwapTerms,
+        ticket: String?
+    )
 
     suspend fun payout(
         payout: SwapPayout,
@@ -98,12 +104,6 @@ interface SwapRelayer {
     ): Sent
 
     suspend fun ready(
-        authorization: SwapAuthorization,
-        terms: SwapTerms,
-        ticket: String?
-    ): Sent
-
-    suspend fun lockRefund(
         authorization: SwapAuthorization,
         terms: SwapTerms,
         ticket: String?
@@ -209,7 +209,10 @@ class MakerClient(
     }
 }
 
-/** A relayer over HTTP. Must not retry either: a request that timed out may have sent its transaction. */
+/**
+ * A relayer over HTTP. Must not retry a request that got no answer: one that timed out may have sent its transaction.
+ * A swap's requests answered `503` with a short `Retry-After` go again after it: the relayer sends nothing twice.
+ */
 class RelayerClient(
     http: HttpClient,
     baseUrl: Url,
@@ -233,17 +236,26 @@ class RelayerClient(
             require(it.transactions.size <= 1) { "funding returned multiple transactions" }
         }
 
-    override suspend fun lockClaim(
-        authorization: SwapAuthorization,
-        terms: SwapTerms,
-        ticket: String?
-    ) = service.send("/v1/lock-claim", authorization.request(terms), AuthorizationRequest.serializer(), ticket)
-
     override suspend fun claim(
         reveal: SwapReveal,
         terms: SwapTerms,
         ticket: String?
     ) = service.send("/v1/claim", reveal.request(terms), RevealRequest.serializer(), ticket)
+
+    // Not patient: a 503 leaves it to the next step, so a busy relayer never holds up the claim.
+    override suspend fun holdClaim(
+        reveal: SwapReveal,
+        terms: SwapTerms,
+        ticket: String?
+    ) {
+        service.post(
+            "/v1/claim/hold",
+            reveal.request(terms),
+            RevealRequest.serializer(),
+            ClaimHeld.serializer(),
+            ticket = ticket,
+        ) { require(it.held || it.transactions != null) { "the relayer neither held nor claimed" } }
+    }
 
     override suspend fun payout(
         payout: SwapPayout,
@@ -256,17 +268,6 @@ class RelayerClient(
         terms: SwapTerms,
         ticket: String?
     ) = service.send("/v1/reverse/ready", authorization.request(terms), AuthorizationRequest.serializer(), ticket)
-
-    override suspend fun lockRefund(
-        authorization: SwapAuthorization,
-        terms: SwapTerms,
-        ticket: String?
-    ) = service.send(
-        "/v1/reverse/lock-refund",
-        authorization.request(terms),
-        AuthorizationRequest.serializer(),
-        ticket,
-    )
 
     override suspend fun refund(
         reveal: SwapReveal,
@@ -292,7 +293,7 @@ private suspend fun <T> SwapService.send(
     request: T,
     serializer: KSerializer<T>,
     ticket: String?,
-): Sent = post(path, request, serializer, Sent.serializer(), ticket = ticket)
+): Sent = post(path, request, serializer, Sent.serializer(), ticket = ticket, isPatient = true)
 
 /** One swap service over HTTP, whose failures are all [AtomicSwapHttpException]s naming it. */
 internal class SwapService(
@@ -307,7 +308,10 @@ internal class SwapService(
         check: (T) -> Unit = {},
     ): T = read(exchange { http.get(url(path)) { quick() } }, answer, check)
 
-    /** A post; one for a swap carries the swap's [ticket], where it has one. */
+    /**
+     * A post; one for a swap carries the swap's [ticket], where it has one. A [isPatient] one answered `503` with a
+     * short `Retry-After` goes again after it, for as long as [BUSY_PATIENCE] in all; a longer wait is the caller's.
+     */
     suspend fun <B, T> post(
         path: String,
         body: B,
@@ -315,8 +319,20 @@ internal class SwapService(
         answer: KSerializer<T>,
         isQuick: Boolean = false,
         ticket: String? = null,
+        isPatient: Boolean = false,
         check: (T) -> Unit = {},
-    ): T = read(deliver(path, json.encodeToString(request, body), isQuick, authorization = null, ticket), answer, check)
+    ): T {
+        val payload = json.encodeToString(request, body)
+        var waited = Duration.ZERO
+        var delivered = deliver(path, payload, isQuick, authorization = null, ticket)
+        while (isPatient && delivered.status == HttpStatusCode.ServiceUnavailable) {
+            val wait = delivered.retryAfter?.takeIf { it <= BUSY_WAIT && waited + it <= BUSY_PATIENCE } ?: break
+            waited += wait
+            delay(wait)
+            delivered = deliver(path, payload, isQuick, authorization = null, ticket)
+        }
+        return read(delivered, answer, check)
+    }
 
     /**
      * An accept, which the maker may ask a token for: then it goes again with one from [tokens] and a request for it
@@ -436,6 +452,12 @@ internal class SwapService(
         /** zecswap-api's `TICKET_HEADER`, which every relayer request for a swap carries its ticket in. */
         const val TICKET_HEADER = "ZecSwap-Ticket"
         val QUICK_TIMEOUT = 20.seconds
+
+        /** The longest `Retry-After` waited out in a post: one asking longer is an outage, not a queue. */
+        val BUSY_WAIT = 30.seconds
+
+        /** The most a post waits in all on `503`s asking it to come back, as zecswap-client's `send` does. */
+        val BUSY_PATIENCE = 90.seconds
         val json =
             Json {
                 ignoreUnknownKeys = true

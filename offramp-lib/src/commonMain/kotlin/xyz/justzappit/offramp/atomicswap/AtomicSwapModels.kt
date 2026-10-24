@@ -25,9 +25,7 @@ class OnChainSwap(
     val user: Address,
     val t1: Long,
     val token: Address,
-    val claimLockUntil: Long,
     val amount: Usdc6,
-    val refundLockUntil: Long,
     val makerShare: SwapShare,
     val userShare: SwapShare,
     /** The share a claim or refund revealed, once there has been one. */
@@ -43,8 +41,6 @@ class SwapState(
     val termsHash: ByteArray,
     val stage: SwapStage,
     val paidOut: Boolean,
-    val claimLockUntil: Long,
-    val refundLockUntil: Long,
     val secret: ByteArray,
 ) {
     /** The swap [terms] describe, once they hash to [termsHash]: the chain shows nothing else of them. */
@@ -60,9 +56,7 @@ class SwapState(
             user = terms.user,
             t1 = terms.t1,
             token = terms.token,
-            claimLockUntil = claimLockUntil,
             amount = terms.amount,
-            refundLockUntil = refundLockUntil,
             makerShare = terms.makerKey,
             userShare = terms.userKey,
             secret = secret,
@@ -70,6 +64,17 @@ class SwapState(
         )
     }
 }
+
+/**
+ * One consistent read: the swap and the newest block, the one as of the other. A reveal is judged only on it, as two
+ * reads from a load-balanced node can answer a block apart, and one block is the gap between a last-moment claim and a
+ * refund at `t1`.
+ */
+class SwapRead(
+    /** The swap as of [head]; null where it isn't on the chain there. */
+    val swap: OnChainSwap?,
+    val head: ChainHead,
+)
 
 /** What the app keeps about a swap it accepted. Its keys derive from the seed and [index] again. */
 @Serializable(with = AtomicSwapRecordSerializer::class)
@@ -100,6 +105,10 @@ data class AtomicSwapRecord(
     val feeExpiresAt: Long? = null,
     /** The maker's ticket for the swap, from its acceptance, which each relayer request carries; none from before. */
     val ticket: String? = null,
+    /** Unix seconds on this device's clock when the claim, and with it the user's share, first went to the relayer. */
+    val claimPostedAt: Long? = null,
+    /** Where handing the claim to the relayer stands, once the deposit went out; none before, or from before. */
+    val claimHold: ClaimHold? = null,
 ) {
     val outcome: AtomicSwapOutcome? get() = end?.outcome
 
@@ -123,6 +132,21 @@ sealed interface SwapDeposit {
     ) : SwapDeposit {
         override val txId: ZcashTxId get() = transaction.txId
     }
+}
+
+/**
+ * The claim handed to the relayer to hold until its window opens, so the user may leave the app once the deposit is
+ * out. The names are kept in records: never rename them.
+ */
+enum class ClaimHold {
+    /** Posted, and kept so before: no answer may have held it yet, so it goes again as it was. */
+    POSTED,
+
+    /** The relayer holds it, and sends it the moment its window opens. */
+    HELD,
+
+    /** The relayer turned it down, or holds no claims: the app claims as it always did. */
+    DECLINED,
 }
 
 /** How a swap ended, and when on this device's clock. */
@@ -179,13 +203,30 @@ sealed interface AtomicSwapStep {
 
 enum class AtomicSwapWait {
     OPENING,
+
+    /** The deposit is out; the maker hasn't made the swap ready, and it isn't `t0` yet. */
     CONFIRMING,
+
+    /** The maker made the swap ready: the claim goes once the ready is deep enough that a reorganisation leaves it. */
+    READY_DEEPENING,
+
+    /** The relayer holds the claim and sends it as its window opens; the app claims if nothing lands soon after. */
+    CLAIM_HELD,
+
+    /**
+     * Too late to claim before `t1`: from `t1` the swap is its maker's to refund for its late window, which brings the
+     * deposit home, and after it the claim is the user's for good.
+     */
+    UNWINDING,
 
     /** The maker called the swap off while the deposit was unmined: it comes home if it is mined. */
     DEPOSIT_UNSETTLED,
 
     /** The refunded deposit is on its way home. */
     REFUNDING,
+
+    /** On a retired lock contract, which this build doesn't drive: only its maker's refund brings the deposit home. */
+    RETIRED,
 }
 
 enum class AtomicSwapActivity { DEPOSITING, CLAIMING, PAYING_OUT, SWEEPING }
@@ -238,6 +279,8 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
         val t1: Long? = null,
         val feeExpiresAt: Long? = null,
         val ticket: String? = null,
+        val claimPostedAt: Long? = null,
+        val claimHold: ClaimHold? = null,
     ) {
         fun record() =
             AtomicSwapRecord(
@@ -263,6 +306,8 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                 t1 = t1,
                 feeExpiresAt = feeExpiresAt,
                 ticket = ticket,
+                claimPostedAt = claimPostedAt,
+                claimHold = claimHold,
             )
 
         companion object {
@@ -287,6 +332,8 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                     t1 = record.t1,
                     feeExpiresAt = record.feeExpiresAt,
                     ticket = record.ticket,
+                    claimPostedAt = record.claimPostedAt,
+                    claimHold = record.claimHold,
                 )
         }
     }

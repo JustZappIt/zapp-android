@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.privateusd.about
 import co.electriccoin.zcash.ui.screen.privateusd.offer
 import java.math.BigDecimal
 import kotlin.test.Test
@@ -18,10 +19,29 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 class PrivateUsdConvertTermsTest {
     private val terms = PrivateUsdConvertTerms(AtomicSwapTestnet.deployment)
     private val ready = ConvertQuote.Ready(ZecQuote(offerFor(depositZat = 202_021), feeZat = 15_000))
+
+    @Test
+    fun `the review says what a maker gone quiet leaves, by the maker's deadlines and the contract's late window`() {
+        val notes = terms.info(PrivateUsdConvertPhase.REVIEW).notes.filterIsInstance<StringResource.ByResource>()
+        val quiet = notes.single { it.resource == R.string.convert_review_info_quiet }
+
+        assertEquals(listOf(45.minutes.about(), 105.minutes.about(), 1.hours.about()), quiet.args)
+        assertTrue(terms.info(PrivateUsdConvertPhase.AMOUNT).notes.none { it == quiet })
+    }
+
+    @Test
+    fun `a duration past the hour keeps its minutes, so a maker's deadline is never told early`() {
+        assertEquals(stringRes(R.string.private_usd_about_minutes, 45), 45.minutes.about())
+        assertEquals(stringRes(R.string.private_usd_about_hours, 1), 60.minutes.about())
+        assertEquals(stringRes(R.string.private_usd_about_hours_minutes, 1, 45), 105.minutes.about())
+        assertEquals(stringRes(R.string.private_usd_about_hours, 24), 24.hours.about())
+    }
 
     @Test
     fun `the typed total, network fee included, must fit what the wallet can spend`() {

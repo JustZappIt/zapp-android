@@ -4,6 +4,7 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.extension.ZERO
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
+import co.electriccoin.zcash.ui.common.provider.lastSyncedBalances
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -35,6 +36,10 @@ class GetOrchardBalanceUseCase(
         return balances[account.sdkAccount.accountUuid]?.orchard?.available ?: Zatoshi.ZERO
     }
 
+    /**
+     * The balance as of the wallet's last sync ([lastSyncedBalances]), for the home banner: while a
+     * sync scans an account a conversion just imported, the SDK reports Ironwood funds as Orchard.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observe(): Flow<Zatoshi?> =
         combine(
@@ -46,7 +51,7 @@ class GetOrchardBalanceUseCase(
             if (synchronizer == null || account == null) {
                 flowOf(null)
             } else {
-                synchronizerProvider.walletBalances.map { balances ->
+                lastSyncedBalances(synchronizerProvider.walletBalances, synchronizer.status).map { balances ->
                     balances?.get(account.sdkAccount.accountUuid)?.orchard?.available
                 }
             }

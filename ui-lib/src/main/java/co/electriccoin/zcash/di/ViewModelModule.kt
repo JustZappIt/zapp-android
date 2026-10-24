@@ -56,6 +56,7 @@ import co.electriccoin.zcash.ui.screen.onramp.OnrampVM
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdVM
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertVM
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressVM
+import co.electriccoin.zcash.ui.screen.privateusd.receive.PrivateUsdReceiveVM
 import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsVM
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseVM
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendVM
@@ -291,6 +292,7 @@ val viewModelModule =
         viewModelOf(::PrivateUsdConvertVM)
         viewModelOf(::PrivateUsdProgressVM)
         viewModelOf(::PrivateUsdSendVM)
+        viewModelOf(::PrivateUsdReceiveVM)
         viewModelOf(::TEXUnsupportedVM)
         viewModelOf(::InsufficientFundsVM)
         viewModelOf(::TopUpVM)

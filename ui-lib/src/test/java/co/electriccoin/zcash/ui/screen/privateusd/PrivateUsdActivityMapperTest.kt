@@ -12,8 +12,12 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdActivityData
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdPendingSend
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRecord
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
+import co.electriccoin.zcash.ui.common.privateusd.Sepolia
+import co.electriccoin.zcash.ui.common.privateusd.depositRecord
 import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
+import co.electriccoin.zcash.ui.design.component.zapp.ellipsizeAddress
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -25,8 +29,14 @@ import xyz.justzappit.offramp.atomicswap.NothingSentCause
 import xyz.justzappit.offramp.atomicswap.RefundCause
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ZcashTxId
+import xyz.justzappit.offramp.deposits.DepositKind
+import xyz.justzappit.offramp.deposits.DepositLanding
+import xyz.justzappit.offramp.deposits.DepositState
+import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.railgun.RailgunAddress
+import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunDestination
+import xyz.justzappit.railgun.RailgunNetwork
 import java.math.BigDecimal
 import java.math.BigInteger
 import kotlin.test.Test
@@ -34,6 +44,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class PrivateUsdActivityMapperTest {
     private val mapper = PrivateUsdActivityMapper()
@@ -166,6 +177,137 @@ class PrivateUsdActivityMapperTest {
         assertEquals(emptyList(), rows)
     }
 
+    @Test
+    fun `a send received reads in, names its sender where it showed itself, and opens its transaction`() {
+        val named = receivedSend(at = 10, sender = SENDER)
+        val rows =
+            rows(
+                PrivateUsdActivityData.Received(received(named)),
+                PrivateUsdActivityData.Received(received(receivedSend(at = 20))),
+            )
+
+        rows.first().onClick?.invoke()
+
+        val got = tokenAmount(named.amount, checkNotNull(PrivateUsdTokens.find(RailgunNetwork.SEPOLIA, Sepolia.USDC)))
+        assertEquals(stringRes(R.string.private_usd_activity_in, got).asPrivacySensitive(), rows.first().amount)
+        assertEquals(listOf(stringRes(R.string.private_usd_activity_received)), rows.map { it.title }.distinct())
+        assertEquals(
+            listOf(
+                stringRes(R.string.private_usd_activity_from, SENDER.value.ellipsizeAddress(8, 4)),
+                stringRes(R.string.private_usd_activity_sender_hidden),
+            ),
+            rows.map { (it.detail as StringResource.ByResource).args[1] },
+        )
+        assertEquals(listOf(PrivateUsdActivityTone.IN), rows.map { it.tone }.distinct())
+        assertEquals(listOf(false), rows.map { it.isPending }.distinct())
+        assertEquals(listOf<Any>(AtomicSwapTestnet.deployment.explorerTxUrl + named.txid.hex), opened)
+    }
+
+    @Test
+    fun `a send received still in screening says it can't be spent yet, with a spinner, sender or not`() {
+        val screening = receivedSend(at = 10, bucket = RailgunBalanceBucket.MISSING_EXTERNAL_POI, sender = SENDER)
+        val row = rows(PrivateUsdActivityData.Received(received(screening))).single()
+
+        assertEquals(
+            stringRes(R.string.private_usd_activity_received_screening),
+            (row.detail as StringResource.ByResource).args[1],
+        )
+        assertTrue(row.isPending)
+        assertEquals(PrivateUsdActivityTone.NEUTRAL, row.tone)
+        assertNotNull(row.onClick)
+    }
+
+    @Test
+    fun `sends received join the activity newest first`() {
+        val toUsd = PrivateUsdActivityData.ToUsd(toUsd(index = 0, at = 10, AtomicSwapOutcome.Paid))
+        val sent = PrivateUsdActivityData.Sent(send(at = 30))
+        val received = received(receivedSend(at = 20))
+        val activity = listOf(sent, toUsd)
+
+        assertEquals(
+            listOf(sent, PrivateUsdActivityData.Received(received), toUsd),
+            activity.withReceived(listOf(received)),
+        )
+        assertEquals(activity, activity.withReceived(emptyList()))
+    }
+
+    @Test
+    fun `a deposit under way reads in as received, shielding or waiting, and opens its transaction once named`() {
+        val signed = depositRecord(createdAt = NOW - 60)
+        val waiting = depositRecord(index = 1, createdAt = NOW - 60, waiting = true)
+        val sent = depositRecord(index = 2, createdAt = NOW - 30, state = DepositState.SENT, transactions = listOf(TX))
+
+        val rows = rows(*listOf(signed, waiting, sent).map(PrivateUsdActivityData::Deposit).toTypedArray())
+
+        val token = AtomicSwapTestnet.deployment.privateUsdToken
+        assertEquals(
+            listOf(stringRes(R.string.private_usd_activity_deposit, token.symbol)),
+            rows.map { it.title }.distinct(),
+        )
+        assertEquals(
+            listOf(
+                stringRes(R.string.private_usd_activity_deposit_shielding),
+                stringRes(R.string.private_usd_activity_deposit_waiting),
+                stringRes(R.string.private_usd_activity_deposit_shielding),
+            ),
+            rows.map { (it.detail as StringResource.ByResource).args[1] },
+        )
+        // What it should bring: $5 less the $0.105 fee, less Railgun's 0.25% of the rest.
+        val arrives = tokenAmount(BigInteger.valueOf(4_882_763), token)
+        assertEquals(stringRes(R.string.private_usd_activity_in, arrives).asPrivacySensitive(), rows.first().amount)
+        assertEquals(listOf(true), rows.map { it.isPending }.distinct())
+        assertEquals(listOf(PrivateUsdActivityTone.NEUTRAL), rows.map { it.tone }.distinct())
+        assertEquals(listOf(null, null), rows.take(2).map { it.onClick })
+        rows.last().onClick?.invoke()
+        assertEquals(listOf<Any>(AtomicSwapTestnet.deployment.explorerTxUrl + TX.hex), opened)
+    }
+
+    @Test
+    fun `a landed deposit is screened a while, then in, and opens the transaction that landed it`() {
+        val screening = landed(at = NOW - 30)
+        val spendable = landed(at = NOW - 120)
+
+        val (inScreening, inBalance) =
+            rows(PrivateUsdActivityData.Deposit(screening), PrivateUsdActivityData.Deposit(spendable))
+
+        assertEquals(
+            stringRes(R.string.private_usd_activity_received_screening),
+            (inScreening.detail as StringResource.ByResource).args[1],
+        )
+        assertTrue(inScreening.isPending)
+        assertEquals(PrivateUsdActivityTone.NEUTRAL, inScreening.tone)
+        assertEquals(
+            stringRes(R.string.private_usd_activity_deposit_shielded),
+            (inBalance.detail as StringResource.ByResource).args[1],
+        )
+        assertEquals(false, inBalance.isPending)
+        assertEquals(PrivateUsdActivityTone.IN, inBalance.tone)
+        inBalance.onClick?.invoke()
+        assertEquals(listOf<Any>(AtomicSwapTestnet.deployment.explorerTxUrl + TX.hex), opened)
+    }
+
+    @Test
+    fun `a rescue reads as a recovered deposit, and one that moved nothing isn't a row`() {
+        val rescued = landed(at = NOW - 120, kind = DepositKind.RESCUE)
+        val gone =
+            listOf(DepositState.REFUSED, DepositState.REVERTED, DepositState.REPLACED, DepositState.EXPIRED)
+                .map { PrivateUsdActivityData.Deposit(depositRecord(state = it)) }
+
+        val rows = rows(PrivateUsdActivityData.Deposit(rescued), *gone.toTypedArray())
+
+        assertEquals(listOf(stringRes(R.string.private_usd_activity_deposit_rescue)), rows.map { it.title })
+    }
+
+    private fun landed(
+        at: Long,
+        kind: DepositKind = DepositKind.SHIELD,
+    ) = depositRecord(
+        kind = kind,
+        createdAt = at - 60,
+        state = DepositState.LANDED,
+        landing = DepositLanding(TX, Usdc6.ofMicros(4_895_000), Usdc6.ofMicros(105_000), at),
+    )
+
     private fun rows(
         vararg data: PrivateUsdActivityData,
         conversion: PrivateUsdConversion? = null,
@@ -178,6 +320,7 @@ class PrivateUsdActivityMapperTest {
             currency = currency,
             onOpenConversion = { conversion -> opened += conversion },
             onOpenUrl = { url -> opened += url },
+            now = Instant.fromEpochSeconds(NOW),
         )
     }
 
@@ -192,7 +335,9 @@ class PrivateUsdActivityMapperTest {
         )
 
     private companion object {
-        val TOKEN = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")
+        const val NOW = 1_792_800_000L
+        val TX = TxHash(ByteArray(32) { 0x7d })
+        val TOKEN = TEST_USD
         val RECIPIENT =
             RailgunDestination.Private(
                 RailgunAddress(

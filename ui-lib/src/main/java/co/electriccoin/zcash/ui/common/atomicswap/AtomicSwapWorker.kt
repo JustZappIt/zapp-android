@@ -58,7 +58,7 @@ class AtomicSwapWorker(
     private suspend fun keepNotificationCurrent() {
         combine(repository.state, reverse.state) { forward, reverse ->
             val converting = reverse.record?.takeIf { it.underWay }
-            converting?.phase?.label() ?: AtomicSwapStage.of(forward).label
+            converting?.phase?.label() ?: forward.progressText()
         }.distinctUntilChanged().collect { label -> promote(applicationContext.getString(label)) }
     }
 

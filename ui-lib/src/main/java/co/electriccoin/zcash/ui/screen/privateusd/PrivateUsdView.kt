@@ -6,8 +6,11 @@ package co.electriccoin.zcash.ui.screen.privateusd
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -15,6 +18,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
+import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,11 +36,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.zapp.ZappAddressCopyRow
+import co.electriccoin.zcash.ui.design.component.zapp.ZappActionTile
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
-import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
-import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappInlineSpinner
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRefreshButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -46,7 +49,6 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.design.util.stringResByAddress
 
 @Composable
 internal fun PrivateUsdView(state: PrivateUsdState) {
@@ -76,7 +78,7 @@ private fun Overview(state: PrivateUsdState) {
             Buckets(state.rows)
         }
         if (state.assets.isNotEmpty()) Assets(state.assets)
-        Sending(state.sending, state.receiveAddress, state.onCopyAddress)
+        Actions(state.sending, state.onReceive)
         state.spendingNote?.let {
             BasicText(
                 text = it.getValue(),
@@ -249,11 +251,18 @@ private fun ActivityRow(row: PrivateUsdActivityState) {
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xxs)) {
             BasicText(text = row.title.getValue(), style = ZappTheme.typography.rowTitle.copy(color = c.text))
-            BasicText(
-                text = row.detail.getValue(),
-                style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
-                maxLines = 1,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xs),
+            ) {
+                if (row.isPending) ZappInlineSpinner()
+                BasicText(
+                    text = row.detail.getValue(),
+                    style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 1,
+                )
+            }
         }
         Column(
             modifier = Modifier.padding(start = ZappTheme.spacing.lg),
@@ -298,39 +307,36 @@ private fun Empty() {
     }
 }
 
+/** Receive, the only way to the wallet's addresses, beside Send and Withdraw: tiles, so three fit a row. */
 @Composable
-private fun Sending(
+private fun Actions(
     sending: PrivateUsdSendingState,
-    receiveAddress: String?,
-    onCopyAddress: () -> Unit,
+    onReceive: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)) {
-            ZappButton(
-                text = stringResource(R.string.private_usd_action_send),
-                leadingIcon = Icons.AutoMirrored.Filled.Send,
-                variant = ZappButtonVariant.Secondary,
-                enabled = sending.isEnabled,
-                modifier = Modifier.weight(1f),
-                onClick = sending.onSend,
-            )
-            ZappButton(
-                text = stringResource(R.string.private_usd_action_withdraw),
-                leadingIcon = Icons.AutoMirrored.Filled.CallMade,
-                variant = ZappButtonVariant.Secondary,
-                enabled = sending.isEnabled,
-                modifier = Modifier.weight(1f),
-                onClick = sending.onWithdraw,
-            )
-        }
-        receiveAddress?.let {
-            ZappAddressCopyRow(
-                address = stringResByAddress(it),
-                copyContentDescription = stringResource(R.string.private_usd_copy_address),
-                onCopy = onCopyAddress,
-                label = stringResource(R.string.private_usd_receive_address),
-            )
-        }
+    Row(
+        modifier = Modifier.height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg),
+    ) {
+        ZappActionTile(
+            label = stringResource(R.string.private_usd_action_receive),
+            icon = Icons.AutoMirrored.Filled.CallReceived,
+            onClick = onReceive,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+        )
+        ZappActionTile(
+            label = stringResource(R.string.private_usd_action_send),
+            icon = Icons.AutoMirrored.Filled.Send,
+            onClick = sending.onSend,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            enabled = sending.isEnabled,
+        )
+        ZappActionTile(
+            label = stringResource(R.string.private_usd_action_withdraw),
+            icon = Icons.AutoMirrored.Filled.CallMade,
+            onClick = sending.onWithdraw,
+            modifier = Modifier.weight(1f).fillMaxHeight(),
+            enabled = sending.isEnabled,
+        )
     }
 }
 
@@ -372,6 +378,16 @@ private fun PrivateUsdPreview() =
                                 onClick = {},
                             ),
                             PrivateUsdActivityState(
+                                key = "received",
+                                title = stringRes("Received privately"),
+                                detail = stringRes("Sep 26 5:20 PM · available once screened"),
+                                amount = stringRes("+$5.00"),
+                                local = stringRes("₹417.55"),
+                                tone = PrivateUsdActivityTone.NEUTRAL,
+                                onClick = {},
+                                isPending = true,
+                            ),
+                            PrivateUsdActivityState(
                                 key = "to-usd",
                                 title = stringRes("Converted ZEC"),
                                 detail = stringRes("Sep 26 5:12 PM · 0.00202021 ZEC"),
@@ -381,7 +397,7 @@ private fun PrivateUsdPreview() =
                                 onClick = {},
                             ),
                         ),
-                    info = PrivateUsdInfo(title = stringRes("About private USD")),
+                    info = PrivateUsdInfo(title = stringRes("About shielded USD")),
                     convertButton = ButtonState(stringRes("Convert")),
                     onRefresh = {},
                     onBack = {},

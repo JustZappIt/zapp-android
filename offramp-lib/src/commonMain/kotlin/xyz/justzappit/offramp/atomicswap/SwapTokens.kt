@@ -382,7 +382,8 @@ internal class SwapTokenIssuance(
                 val requests = List(perDay) { crypto.blind(base64Url.decode(challenge), tokenKey) }
                 requests to issued(client, requests)
             } catch (e: AtomicSwapBlockedException) {
-                // Kept for later quotes; any other answer clears it, since the issuer checks the attestation first.
+                // Kept so nothing is fetched ahead for this device; any other answer clears it, since the issuer checks
+                // the attestation first.
                 if (e.reason == AtomicSwapBlock.TOKENS_DEVICE_REFUSED) store.save(state.copy(refusedBy = issuer.name))
                 throw e
             } finally {

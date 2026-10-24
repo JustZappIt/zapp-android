@@ -217,6 +217,18 @@ class SwapRecordStorageTest {
         assertEquals(mainnet, storeJson.decodeFromString(SwapDeployment.serializer(), json))
     }
 
+    @Test
+    fun aWindowsDeploymentWritesItsWindowsWhileOneKeptBeforeReadsAsALockContract() {
+        val windows = TESTNET.copy(windows = SwapWindows(min = 1_800, late = 3_600))
+        val json = storeJson.encodeToString(SwapDeployment.serializer(), windows)
+
+        assertEquals(TESTNET_JSON.removeSuffix("}") + ""","windows":{"min":1800,"late":3600}}""", json)
+        assertEquals(windows, storeJson.decodeFromString(SwapDeployment.serializer(), json))
+        assertFalse(windows.retired)
+        assertTrue(storeJson.decodeFromString(SwapDeployment.serializer(), TESTNET_JSON).retired)
+        assertTrue(storeJson.decodeFromString(ReverseSwapRecord.serializer(), REVERSE_STATES.last()).deployment.retired)
+    }
+
     private fun forward(json: String) = storeJson.decodeFromString(AtomicSwapRecord.serializer(), json)
 
     private fun <T> assertRoundTrip(

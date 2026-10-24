@@ -11,6 +11,7 @@ import co.electriccoin.zcash.preference.api.PreferenceProvider
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
@@ -84,6 +85,7 @@ class ResetZashiUseCaseTest {
             coVerifyOrder {
                 fixture.atomicSwapRepository.reset()
                 fixture.reverseSwapRepository.reset()
+                fixture.privateUsdDeposits.reset()
                 fixture.railgunWalletRepository.reset()
                 fixture.encryptedPreferences.clearPreferences()
             }
@@ -122,6 +124,7 @@ class ResetZashiUseCaseTest {
         val atomicSwapRepository = mockk<AtomicSwapRepository>(relaxed = true)
         val reverseSwapRepository = mockk<ReverseSwapRepository>(relaxed = true)
         val railgunWalletRepository = mockk<RailgunWalletRepository>(relaxed = true)
+        val privateUsdDeposits = mockk<PrivateUsdDepositsRepository>(relaxed = true)
         val selectedTabRepository = SelectedTabRepository()
 
         val giftCardStorageProvider = mockk<GiftCardStorageProvider>()
@@ -166,6 +169,7 @@ class ResetZashiUseCaseTest {
                     reverseSwapRepository = reverseSwapRepository,
                     railgunWalletRepository = railgunWalletRepository,
                     privateUsdSenders = mockk(relaxed = true),
+                    privateUsdDeposits = privateUsdDeposits,
                     selectedTabRepository = selectedTabRepository,
                 )
         }
@@ -181,6 +185,7 @@ class ResetZashiUseCaseTest {
             coVerify(exactly = 0) { atomicSwapRepository.reset() }
             coVerify(exactly = 0) { reverseSwapRepository.reset() }
             coVerify(exactly = 0) { railgunWalletRepository.reset() }
+            coVerify(exactly = 0) { privateUsdDeposits.reset() }
         }
     }
 }

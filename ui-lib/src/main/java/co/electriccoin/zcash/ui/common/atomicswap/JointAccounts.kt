@@ -12,6 +12,7 @@ import cash.z.ecc.android.sdk.model.BlockHeight
 import cash.z.ecc.android.sdk.model.Pczt
 import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.TransactionOverview
+import cash.z.ecc.android.sdk.model.UnifiedAddressRequest
 import cash.z.ecc.android.sdk.model.UnifiedFullViewingKey
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.Zip32AccountIndex
@@ -147,12 +148,9 @@ class JointAccounts(
         maximumFeeZat: Long,
         sign: suspend (ByteArray, SweepIntent) -> ByteArray,
     ): JointSweep {
-        val home =
-            accounts
-                .getZashiAccount()
-                .unified.address.address
         val feeLimit = minOf(maximumFeeZat, MAX_SWEEP_FEE_ZAT, balance - 1)
         require(feeLimit >= ZIP317_MIN_FEE_ZAT) { "the sweep fee is not authorized" }
+        val home = freshAddress(synchronizer)
         val intent = SweepIntent(home, balance - feeLimit, feeLimit)
         val sweep = proposal(synchronizer, account, balance, home)
         require(sweep.feeZat <= feeLimit) { "the sweep exceeds its fee authorization" }
@@ -163,6 +161,15 @@ class JointAccounts(
         val created = synchronizer.broadcaster.createTransactionFromPczt(withProofs, Pczt(signed)).single()
         return JointSweep(created.kept(), balance - sweep.feeZat, sweep.feeZat)
     }
+
+    /**
+     * A new Orchard-only address of the wallet's own account, never shown or paid before: each sweep pays one of its
+     * own. The maker holds the joint account's viewing key, and SDK 3.2.1 seals every output's outgoing copy under it
+     * with no way to discard that copy, so the maker reads where each sweep goes. A sweep to the address the wallet
+     * shows, or to one address every time, would tie every swap to the wallet.
+     */
+    private suspend fun freshAddress(synchronizer: Synchronizer): String =
+        synchronizer.getCustomUnifiedAddress(accounts.getZashiAccount().sdkAccount, UnifiedAddressRequest.Orchard)
 
     private suspend fun proposal(
         synchronizer: Synchronizer,

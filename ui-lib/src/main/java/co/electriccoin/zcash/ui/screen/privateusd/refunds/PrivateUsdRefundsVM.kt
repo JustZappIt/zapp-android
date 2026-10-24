@@ -8,13 +8,16 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRecords
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.common.privateusd.Sepolia
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
+import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -27,6 +30,7 @@ import co.electriccoin.zcash.ui.screen.privateusd.toFailure
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -34,7 +38,9 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -46,6 +52,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
+import xyz.justzappit.offramp.deposits.DepositRescuable
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -53,12 +60,34 @@ import kotlin.time.Instant
 class PrivateUsdRefundsVM(
     records: ReverseSwapRecords,
     private val repository: ReverseSwapRepository,
+    private val deposits: PrivateUsdDepositsRepository,
+    deployments: AtomicSwapDeployments,
     private val auth: SecretAuthGate,
     observeLocalCurrency: ObserveLocalCurrencyUseCase,
     private val navigation: NavigationRouter,
 ) : ViewModel() {
     private val refresh = MutableStateFlow(0)
     private val form = MutableStateFlow(RefundActions())
+
+    // What deposits are in, which a rescue shields again.
+    private val depositToken =
+        deployments.current?.let { deployment ->
+            deployment.usdcDeposits?.let { PrivateUsdTokens.find(deployment.railgunNetwork, it.token) }
+        }
+
+    // What Railgun's screening sent back to the deposit addresses' vaults, read as the screen opens, on a refresh and
+    // every CHECK_AFTER while it shows. A read that fails leaves what showed: the money stays in its vault.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val depositChecks: Flow<List<DepositRescuable>> =
+        refresh
+            .flatMapLatest {
+                flow {
+                    while (true) {
+                        runConversionStep("no deposit rescue check") { deposits.rescuable() }.onSuccess { emit(it) }
+                        delay(CHECK_AFTER)
+                    }
+                }
+            }.onStart { emit(emptyList()) }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val checks =
@@ -122,13 +151,20 @@ class PrivateUsdRefundsVM(
             }
 
     internal val state =
-        combine(checks, form, observeLocalCurrency(), auth.pinPrompt) { checks, actions, currency, pin ->
+        combine(checks, depositChecks, form, observeLocalCurrency(), auth.pinPrompt) {
+            checks,
+            rescuable,
+            actions,
+            currency,
+            pin,
+            ->
             PrivateUsdRefundsState(
                 refunds = checks.refunds.map { it.toState(actions, currency) },
+                deposits = rescuable.mapNotNull { it.toState(actions) },
                 isLoading = false,
                 isRefreshing = checks.isRefreshing,
                 error = checks.error,
-                isBackEnabled = actions.busy == null,
+                isBackEnabled = !actions.isBusy,
                 pinVerify = pin,
                 onRefresh = ::onRefresh,
                 onBack = ::onBack,
@@ -182,8 +218,49 @@ class PrivateUsdRefundsVM(
         )
     }
 
+    // Shown with the rescue's fee, the relayer's alone: what the vault holds less it is shielded again.
+    private fun DepositRescuable.toState(actions: RefundActions): PrivateUsdDepositRefundState? {
+        val token = depositToken ?: return null
+        val busy = actions.busyDeposit == index
+        return PrivateUsdDepositRefundState(
+            index = index,
+            body =
+                if (busy) {
+                    stringRes(R.string.refunds_deposit_recovering)
+                } else {
+                    stringRes(R.string.refunds_deposit_body, tokenAmount(held, token).asPrivacySensitive())
+                },
+            fee = stringRes(R.string.refunds_deposit_fee, tokenAmount(fee, token)),
+            recover =
+                ButtonState(
+                    stringRes(R.string.refunds_deposit_recover),
+                    isEnabled = !actions.isBusy,
+                    isLoading = busy,
+                ) { recoverDeposit(index) },
+            error = actions.depositErrors[index],
+        )
+    }
+
+    private fun recoverDeposit(index: Int) {
+        if (form.value.isBusy) return
+        form.update { it.copy(busyDeposit = index, depositErrors = it.depositErrors - index) }
+        viewModelScope.launch {
+            try {
+                runConversionStep("a deposit wasn't recovered") {
+                    if (auth.authenticateSpend()) deposits.rescue(index)
+                }.onFailure {
+                    val message = stringRes(R.string.refunds_deposit_recover_failed)
+                    form.update { it.copy(depositErrors = it.depositErrors + (index to message)) }
+                }
+            } finally {
+                form.update { it.copy(busyDeposit = null) }
+                refresh.update { it + 1 }
+            }
+        }
+    }
+
     private fun recover(index: Int) {
-        if (form.value.busy != null) return
+        if (form.value.isBusy) return
         if (state.value.refunds.none { it.index == index && it.recover?.isEnabled == true }) return
         form.update { it.copy(busy = index, errors = it.errors - index) }
         viewModelScope.launch {
@@ -202,17 +279,22 @@ class PrivateUsdRefundsVM(
     }
 
     private fun onRefresh() {
-        if (form.value.busy == null) refresh.update { it + 1 }
+        if (!form.value.isBusy) refresh.update { it + 1 }
     }
 
     private fun onBack() {
-        if (form.value.busy == null) navigation.back()
+        if (!form.value.isBusy) navigation.back()
     }
 
     private data class RefundActions(
         val busy: Int? = null,
-        val errors: Map<Int, StringResource> = emptyMap()
-    )
+        val errors: Map<Int, StringResource> = emptyMap(),
+        /** The deposit address whose vault is being rescued. */
+        val busyDeposit: Int? = null,
+        val depositErrors: Map<Int, StringResource> = emptyMap(),
+    ) {
+        val isBusy: Boolean get() = busy != null || busyDeposit != null
+    }
 
     private data class RefundCheck(
         val record: ReverseSwapRecord,

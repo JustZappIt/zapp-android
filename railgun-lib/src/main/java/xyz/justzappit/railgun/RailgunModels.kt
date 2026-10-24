@@ -11,7 +11,9 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.TxHash
 import java.math.BigInteger
+import kotlin.time.Instant
 
 @Serializable
 enum class RailgunNetwork(
@@ -42,7 +44,9 @@ object RailgunEndpoints {
     val SEPOLIA_KEYED_RPC_URL: String? = BuildConfig.ETHEREUM_RPC_URL_SEPOLIA.ifBlank { null }
     val MAINNET_KEYED_RPC_URL: String? = BuildConfig.ETHEREUM_RPC_URL_MAINNET.ifBlank { null }
 
-    // The SDK's own: its quick sync, and the gateway it downloads proving artifacts from.
+    // The SDK's own: its quick sync, and the gateway it downloads proving artifacts from. On Sepolia the quick sync
+    // and the transaction list come from our copy of Railgun's list instead, its hash chain repaired
+    // (web/sepolia-list-plugin.mjs).
     internal val hosts =
         setOf(
             SEPOLIA_RPC_HOST,
@@ -53,6 +57,7 @@ object RailgunEndpoints {
             MAINNET_INFURA_HOST,
             POI_NODE_HOST,
             "rail-squid.squids.live",
+            "railgun-sepolia-list.pepeman931.workers.dev",
             "ipfs-lb.com",
         )
 }
@@ -110,6 +115,33 @@ data class RailgunTokenAmount(
 data class RailgunBalances(
     val byBucket: Map<RailgunBalanceBucket, List<RailgunTokenAmount>>
 )
+
+/** What a sync found: the balances, and the private sends the wallet received. */
+data class RailgunRefresh(
+    val balances: RailgunBalances,
+    /** Null when the page couldn't read the wallet's history; the balances stand without it. */
+    val received: List<RailgunReceivedSend>?,
+)
+
+/**
+ * A private send another Railgun wallet made to this one, as the notes a sync already decrypted show it: the SDK's
+ * history, with shields (a deposit, a conversion's payout) and change left out. One per token amount.
+ */
+data class RailgunReceivedSend(
+    /** The Ethereum transaction that carried it. */
+    val txid: TxHash,
+    val token: Address,
+    val amount: BigInteger,
+    /** Where it stands with Railgun's screening; null for a bucket this build doesn't know. */
+    val bucket: RailgunBalanceBucket?,
+    /** When its block was made, where the engine knows. */
+    val blockTime: Instant?,
+    /** The sender's `0zk` address, only where the sender chose to show it. */
+    val sender: RailgunAddress?,
+) {
+    /** Screened and spendable, or spent since. */
+    val isSettled: Boolean get() = bucket == RailgunBalanceBucket.SPENDABLE || bucket == RailgunBalanceBucket.SPENT
+}
 
 /** Railgun's withdrawal fee, in basis points of what is unshielded. */
 @Serializable
@@ -205,6 +237,55 @@ data class RailgunRelayedProof(
     val request: RailgunRelayRequest,
     val spends: List<RailgunNullifiers>,
 )
+
+/**
+ * A shield note to [receiver] for zecSwap's Deposits contract to pay, as Railgun's engine built it in the page: [npk],
+ * then its ciphertext's three [encryptedBundle] words and [shieldKey], 32 bytes each. The contract shields its own
+ * token, and the value its vault holds, to these five words alone, and a deposit's nonce and `note` commit to them.
+ *
+ * The page opened the note with the wallet's viewing key before giving it out: the random it hides gives [npk] with the
+ * wallet's master public key. Neither that random nor the shield key's private half left the page, so a note can't be
+ * built again: keep it whole before a deposit that pays it goes out. Never show or log one: [toString] tells nothing.
+ */
+class RailgunDepositNote(
+    /** The wallet it pays: the session's own. */
+    val receiver: RailgunAddress,
+    npk: ByteArray,
+    encryptedBundle: List<ByteArray>,
+    shieldKey: ByteArray,
+) {
+    private val words: List<ByteArray> = (listOf(npk) + encryptedBundle + listOf(shieldKey)).map { it.copyOf() }
+
+    init {
+        require(encryptedBundle.size == BUNDLE_WORDS) { "an encrypted bundle is $BUNDLE_WORDS words" }
+        require(words.all { it.size == WORD_BYTES }) { "each of a note's words is $WORD_BYTES bytes" }
+    }
+
+    /** The note's public key, `Poseidon(masterPublicKey, random)`: what's shielded to it only this wallet can spend. */
+    val npk: ByteArray get() = words.first().copyOf()
+
+    /** The random, encrypted to the wallet's viewing key, and the receiver's viewing key, for the shielder. */
+    val encryptedBundle: List<ByteArray> get() = words.subList(1, 1 + BUNDLE_WORDS).map { it.copyOf() }
+
+    /** The public half of the key the bundle is encrypted with. */
+    val shieldKey: ByteArray get() = words.last().copyOf()
+
+    override fun equals(other: Any?): Boolean =
+        other is RailgunDepositNote &&
+            receiver == other.receiver &&
+            words.indices.all { words[it].contentEquals(other.words[it]) }
+
+    override fun hashCode(): Int =
+        words.fold(receiver.hashCode()) { hash, word -> HASH_MULTIPLIER * hash + word.contentHashCode() }
+
+    override fun toString(): String = "RailgunDepositNote"
+
+    companion object {
+        const val WORD_BYTES = 32
+        const val BUNDLE_WORDS = 3
+        private const val HASH_MULTIPLIER = 31
+    }
+}
 
 @Serializable
 enum class RailgunMerkletree {

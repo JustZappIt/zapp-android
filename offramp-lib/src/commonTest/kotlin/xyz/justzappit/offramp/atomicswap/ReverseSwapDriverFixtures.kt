@@ -15,8 +15,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 abstract class ReverseSwapDriverFixtures {
-    protected class Harness :
-        SwapMaker,
+    protected class Harness(
+        private val deployment: SwapDeployment = DEPLOYMENT,
+    ) : SwapMaker,
         SwapRelayer,
         ReverseSwapKeys,
         ReverseSwapChain,
@@ -60,15 +61,21 @@ abstract class ReverseSwapDriverFixtures {
         var beforeSecret: () -> Unit = {}
         var beforeUpdate: () -> Unit = {}
         var rescueNonce = 0L
-        var refundUntil = 0L
-        var claimUntil = 0L
         var paidOut = false
+
+        /** What the newest block shows of the escrow, where it shows other than the confirmed read. */
+        var latest: (() -> OnChainSwap?)? = null
+
+        /** The refunds the relayer was asked for, each as the store kept the conversion when it came. */
+        val keptAtRefund = mutableListOf<ReverseSwapRecord?>()
+
+        /** Refunds the relayer answers `503` before it takes one. */
+        var busyRefunds = 0
         var accepts = 0
         var prepares = 0
         var saves = 0
         var readyCalls = 0
         var readySignatures = 0
-        var lockCalls = 0
         var refundCalls = 0
         var payoutCalls = 0
         var rescueCalls = 0
@@ -123,21 +130,27 @@ abstract class ReverseSwapDriverFixtures {
                 MAKER,
                 REFUND,
                 TOKEN,
-                claimUntil,
                 AMOUNT,
-                refundUntil,
                 USER_SHARE,
                 MAKER_SHARE,
                 ByteArray(32) { 3 },
                 EMPTY_NOTE,
             )
 
-        fun state() = ReverseChainState(escrow?.let { swap(it.stage) }, refundNote, 10, block, now, 600)
+        fun state() = ReverseChainState(escrow?.let { swap(it.stage) }, refundNote, 10, block, now)
 
         override suspend fun read(
             id: SwapId,
             terms: SwapTerms
         ) = state().let { it.copy(swap = it.swap?.state()?.verified(terms)) }
+
+        override suspend fun swapNow(
+            id: SwapId,
+            terms: SwapTerms
+        ): SwapRead {
+            val escrow = latest.let { if (it != null) it() else escrow?.let { swap(it.stage) } }
+            return SwapRead(escrow?.state()?.verified(terms), ChainHead(block, now))
+        }
 
         override suspend fun fundingStatus(transaction: TxHash) = fundingState
 
@@ -207,24 +220,18 @@ abstract class ReverseSwapDriverFixtures {
             return Sent(emptyList())
         }
 
-        override suspend fun lockRefund(
-            authorization: SwapAuthorization,
-            terms: SwapTerms,
-            ticket: String?
-        ): Sent {
-            assertEquals(record.refundLock, authorization)
-            relayed += "lockRefund" to ticket
-            lockCalls++
-            return Sent(emptyList())
-        }
-
         override suspend fun refund(
             reveal: SwapReveal,
             terms: SwapTerms,
             ticket: String?
         ): Sent {
             assertEquals(record.payout, reveal.payout)
+            keptAtRefund += saved
             relayed += "refund" to ticket
+            if (busyRefunds > 0) {
+                busyRefunds--
+                throw AtomicSwapHttpException.Refused(AtomicSwapService.RELAYER, 503, SwapErrorCode.UNAVAILABLE, "busy")
+            }
             refundCalls++
             return Sent(emptyList())
         }
@@ -251,13 +258,13 @@ abstract class ReverseSwapDriverFixtures {
             return Sent(emptyList())
         }
 
-        override suspend fun lockClaim(
-            authorization: SwapAuthorization,
+        override suspend fun claim(
+            reveal: SwapReveal,
             terms: SwapTerms,
             ticket: String?
         ) = error("forward only")
 
-        override suspend fun claim(
+        override suspend fun holdClaim(
             reveal: SwapReveal,
             terms: SwapTerms,
             ticket: String?
@@ -275,8 +282,6 @@ abstract class ReverseSwapDriverFixtures {
             readySignatures++
             return ByteArray(65)
         }
-
-        override suspend fun signLockRefund(record: ReverseSwapRecord, deadline: Long) = ByteArray(65)
 
         override suspend fun signPayout(record: ReverseSwapRecord, terms: RelayerTerms): ByteArray {
             beforePayout()
@@ -380,14 +385,6 @@ abstract class ReverseSwapDriverFixtures {
 
                 override suspend fun claimSecret(index: Int) = ByteArray(32).also { beforeSecret() }
 
-                override suspend fun signLockClaim(
-                    index: Int,
-                    chainId: ChainId,
-                    contract: Address,
-                    swapId: SwapId,
-                    deadline: Long,
-                ) = error("forward only")
-
                 override suspend fun signPayout(
                     index: Int,
                     chainId: ChainId,
@@ -411,7 +408,7 @@ abstract class ReverseSwapDriverFixtures {
 
         private fun driver() =
             ReverseSwapDriver(
-                deployment = DEPLOYMENT,
+                deployment = deployment,
                 maker = this,
                 relayer = this,
                 chain = this,
@@ -447,6 +444,7 @@ abstract class ReverseSwapDriverFixtures {
 
         /** The maker's ticket for [SWAP_ID]: its id, a dot, and a MAC the app never reads. */
         val TICKET = "${SWAP_ID.hex}." + "3f".repeat(32)
+        val WINDOWS = SwapWindows(min = 1_800, late = 3_600)
         val DEPLOYMENT =
             SwapDeployment(
                 Url("https://maker"),
@@ -458,6 +456,7 @@ abstract class ReverseSwapDriverFixtures {
                 address(6),
                 MAKER,
                 RELAYER,
+                windows = WINDOWS,
             )
 
         fun hex(bytes: Int, value: Int) = "0x" + value.toString(16).padStart(2, '0').repeat(bytes)

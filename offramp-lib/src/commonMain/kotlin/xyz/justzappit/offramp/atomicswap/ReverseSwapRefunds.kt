@@ -3,8 +3,9 @@
 
 package xyz.justzappit.offramp.atomicswap
 
-/** Getting a reverse swap's dollars back: the refund lock, the reveal under it, the payout, and a rescue. */
+/** Getting a reverse swap's dollars back: the refund in its window, its payout, and a rescue. */
 internal class ReverseSwapRefunds(
+    private val deployment: SwapDeployment,
     private val relayer: SwapRelayer,
     private val chain: ReverseSwapChain,
     private val keys: AtomicSwapKeys,
@@ -76,67 +77,55 @@ internal class ReverseSwapRefunds(
                 store.keep(record, record.copy(phase = ReversePhase.REFUND_WAIT))
             }
 
-            escrow.refundLockUntil <= observed.now -> {
-                lockRefund(record, escrow, observed, outbox)
-            }
-
             else -> {
                 reveal(record, outbox)
             }
         }
     }
 
-    // A claim lock held, or the maker's turn after a refund lock of ours lapsed, keeps the refund waiting.
-    private suspend fun lockRefund(
-        record: ReverseSwapRecord,
-        escrow: OnChainSwap,
-        observed: ReverseChainState,
-        outbox: ReverseOutbox,
-    ) {
-        if (!mayTakeLock(escrow.refundLockUntil, escrow.claimLockUntil, observed.now, observed.lockDuration)) return
-        check(SIGNATURE_TTL_SECONDS < observed.lockDuration) { "the lock is too short to sign for" }
-        check(observed.now <= Long.MAX_VALUE - SIGNATURE_TTL_SECONDS) { "invalid chain time" }
-        val deadline = observed.now + SIGNATURE_TTL_SECONDS
-        val authorization =
-            record.refundLock?.takeIf { it.deadline >= observed.now }
-                ?: SwapAuthorization(record.swapId, deadline, reverseKeys.signLockRefund(record, deadline).hex())
-        store.keep(record, record.copy(refundLock = authorization, phase = ReversePhase.REFUNDING))
-        outbox.send { relayer.lockRefund(authorization, record.terms, record.ticket) }
-    }
-
-    // Never sends the secret on the strength of a relayer response, an old lock observation or a lagging head.
+    // Of every reveal, this is the one that can lose money: a refund landing behind a ready reverts with the user's
+    // share public, and the maker could take both sides. So it goes only where its window lets it on a fresh consistent
+    // read, judged again on another right before it leaves, never on a relayer's answer, an old read or a lagging head.
+    // It's kept as posted before it goes, and no ready is ever signed after.
     private suspend fun reveal(
         record: ReverseSwapRecord,
         outbox: ReverseOutbox,
     ) {
-        val fresh = verifier.state(record)
-        val escrow = fresh.swap?.takeIf { it.stage == SwapStage.OPEN || it.stage == SwapStage.READY } ?: return
-        val observedNow = freshHead(fresh.now, nowSeconds())
-        val safe =
-            escrow.refundLockUntil > observedNow &&
-                escrow.refundLockUntil - observedNow > REVEAL_MARGIN_SECONDS
-        if (!safe) return
-        sendPayout(record, ReversePhase.REFUNDING, outbox) {
+        if (refusal(record) != null) {
+            store.keep(record, record.copy(phase = ReversePhase.REFUND_WAIT))
+            return
+        }
+        sendPayout(record, ReversePhase.REFUNDING, outbox, posted = record.refundPostedAt ?: nowSeconds()) {
             val reveal = SwapReveal(record.swapId, keys.claimSecret(record.index).hex(), it)
-            val current = verifier.state(record)
-            val locked =
-                current.swap?.takeIf { swap ->
-                    swap.stage == SwapStage.OPEN || swap.stage == SwapStage.READY
-                }
-            val now = freshHead(current.now, nowSeconds())
-            if (locked != null && locked.refundLockUntil > now &&
-                locked.refundLockUntil - now > REVEAL_MARGIN_SECONDS
-            ) {
-                relayer.refund(reveal, record.terms, record.ticket)
-            }
+            if (refusal(record) == null) relayer.refund(reveal, record.terms, record.ticket)
         }
     }
 
-    /** Signs the refund's payout when it goes out, at the relayer's fee then, and keeps it with the record first. */
+    /**
+     * Why the refund can't go now, on a fresh consistent read; null when it may. An open escrow is the user's to refund
+     * once the chain is past the deadline of the ready we signed, or at `t0`, and a ready one from `t1`.
+     */
+    private suspend fun refusal(record: ReverseSwapRecord): Refusal? {
+        val read = verifier.latest(record)
+        freshHead(read.head.time, nowSeconds())
+        val escrow = read.swap
+        val windows = deployment.windows
+        return if (escrow == null || windows == null) {
+            Refusal.Shut
+        } else {
+            windows.reverseRefund(escrow.stage, escrow.t0, escrow.t1, read.head, record.ready?.deadline, false)
+        }
+    }
+
+    /**
+     * Signs the refund's payout when it goes out, at the relayer's fee then, and keeps it with the record first,
+     * with when the refund was [posted] where one goes.
+     */
     private suspend fun sendPayout(
         record: ReverseSwapRecord,
         phase: ReversePhase,
         outbox: ReverseOutbox,
+        posted: Long? = record.refundPostedAt,
         send: suspend (SwapPayout) -> Unit,
     ) {
         val terms = verifier.relayerTerms(record)
@@ -147,7 +136,7 @@ internal class ReverseSwapRefunds(
         check(payout.swapId == record.swapId && payout.note == expectedNote) {
             "the saved refund payout is for another swap"
         }
-        store.keep(record, record.copy(payout = payout, phase = phase))
+        store.keep(record, record.copy(payout = payout, phase = phase, refundPostedAt = posted))
         outbox.send { send(payout) }
     }
 

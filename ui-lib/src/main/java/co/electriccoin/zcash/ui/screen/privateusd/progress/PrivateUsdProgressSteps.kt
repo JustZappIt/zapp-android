@@ -20,9 +20,11 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByQuantity
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.about
+import co.electriccoin.zcash.ui.screen.privateusd.dateTime
 import co.electriccoin.zcash.ui.screen.privateusd.joinDetail
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
+import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.NothingSentCause
 import xyz.justzappit.offramp.atomicswap.RefundCause
@@ -93,19 +95,22 @@ internal class PrivateUsdProgressSteps(
         now: Long,
         isSlowToOpen: Boolean
     ): StringResource? {
-        // Enough confirmations and no word from the maker, so no payout signed: the app claims by itself at t0.
+        // Enough confirmations and no word from the maker, so no claim yet: the app claims by itself at t0.
         val silentUntil =
             swap.wait
                 ?.t0
                 ?.takeIf {
                     swap.wait.reason == AtomicSwapWait.CONFIRMING &&
                         (swap.confirmations ?: 0) >= deployment.makerConfirmations &&
-                        swap.record?.payout == null
+                        swap.record?.claimPostedAt == null
                 }?.takeIf { it > now && swap.problem == null }
         return when {
             swap.resuming -> stringRes(R.string.convert_resuming)
+            swap.wait?.reason == AtomicSwapWait.UNWINDING -> unwinding(swap.wait, deployment.swap.windows?.late)
+            swap.wait?.reason == AtomicSwapWait.RETIRED -> stringRes(R.string.convert_retired)
             AtomicSwapStage.of(swap) == AtomicSwapStage.REFUNDING -> stringRes(R.string.convert_refunding)
             swap.wait?.reason == AtomicSwapWait.DEPOSIT_UNSETTLED -> stringRes(R.string.convert_unsettled)
+            swap.wait?.reason == AtomicSwapWait.CLAIM_HELD -> stringRes(R.string.convert_claim_held)
             isSlowToOpen -> stringRes(R.string.convert_opening_slow)
             silentUntil != null -> stringRes(R.string.convert_maker_silent, time(silentUntil))
             else -> null
@@ -290,6 +295,23 @@ internal fun ZcashWait.stepDetail(): StringResource? =
         ZcashWait.SYNCING -> stringRes(R.string.convert_wait_syncing)
         ZcashWait.CONFIRMATIONS -> null
     }
+
+// Too late to claim before t1: the maker may call the swap off in its [late] window, or the claim goes for good after.
+private fun unwinding(
+    wait: AtomicSwapStep.Waiting?,
+    late: Long?,
+): StringResource? {
+    val t1 = wait?.t1
+    return if (t1 == null || late == null) {
+        null
+    } else {
+        stringRes(
+            R.string.convert_unwinding,
+            dateTime(kotlin.time.Instant.fromEpochSeconds(t1)),
+            dateTime(kotlin.time.Instant.fromEpochSeconds(t1 + late)),
+        )
+    }
+}
 
 private fun time(epochSeconds: Long): String =
     DateTimeFormatter

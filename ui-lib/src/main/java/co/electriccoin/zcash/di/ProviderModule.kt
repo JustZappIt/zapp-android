@@ -22,6 +22,8 @@ import co.electriccoin.zcash.ui.common.atomicswap.SwapTokenStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.SwapZcashTransactions
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProvider
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProviderImpl
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositKeyring
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositStore
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.provider.AndroidOnrampDeviceSignalsProvider
@@ -570,6 +572,8 @@ val providerModule =
         singleOf(::AtomicSwapScheduler)
         single { PrivateUsdSenders(get(), get(), get(named(ATOMIC_SWAP_HTTP)), get(), get()) }
         singleOf(::PrivateUsdSendLog)
+        singleOf(::PrivateUsdDepositKeyring)
+        singleOf(::PrivateUsdDepositStore)
     }
 
 internal const val ATOMIC_SWAP_HTTP = "atomicswap_http"

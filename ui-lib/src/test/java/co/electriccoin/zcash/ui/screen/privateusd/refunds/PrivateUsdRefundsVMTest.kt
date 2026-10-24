@@ -6,12 +6,18 @@ package co.electriccoin.zcash.ui.screen.privateusd.refunds
 import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRecords
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
+import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
+import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
+import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.toZec
 import io.mockk.coEvery
@@ -35,6 +41,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Test
 import xyz.justzappit.offramp.atomicswap.ReversePhase
+import xyz.justzappit.offramp.deposits.DepositRescuable
+import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -44,6 +52,8 @@ import kotlin.test.assertNull
 class PrivateUsdRefundsVMTest {
     private val history = MutableStateFlow(listOf(toZec(1, ReversePhase.REFUNDED), toZec(2, ReversePhase.REFUNDED)))
     private val repository = mockk<ReverseSwapRepository>(relaxed = true)
+    private val deposits =
+        mockk<PrivateUsdDepositsRepository>(relaxed = true) { coEvery { rescuable() } returns emptyList() }
     private val auth =
         mockk<SecretAuthGate> {
             every { pinPrompt } returns MutableStateFlow<PinVerifyState?>(null)
@@ -152,12 +162,78 @@ class PrivateUsdRefundsVMTest {
             coVerify(exactly = 0) { repository.rescue(2) }
         }
 
+    @Test
+    fun `a vault Railgun's screening sent back is offered, with the rescue's fee, and rescued behind the app lock`() =
+        runTest {
+            coEvery { deposits.rescuable() } returns
+                listOf(DepositRescuable(3, BigInteger.valueOf(700_000), BigInteger.valueOf(100_000)))
+            start()
+
+            val deposit =
+                vm.state.value.deposits
+                    .single()
+            val token = AtomicSwapTestnet.deployment.privateUsdToken
+            assertEquals(3, deposit.index)
+            assertEquals(
+                stringRes(
+                    R.string.refunds_deposit_body,
+                    tokenAmount(BigInteger.valueOf(700_000), token).asPrivacySensitive(),
+                ),
+                deposit.body,
+            )
+            assertEquals(
+                stringRes(R.string.refunds_deposit_fee, tokenAmount(BigInteger.valueOf(100_000), token)),
+                deposit.fee,
+            )
+            deposit.recover.onClick()
+            runCurrent()
+
+            coVerify(exactly = 1) { auth.authenticate(any(), any()) }
+            coVerify(exactly = 1) { deposits.rescue(3) }
+            assertNull(
+                vm.state.value.deposits
+                    .single()
+                    .error
+            )
+        }
+
+    @Test
+    fun `a rescue that fails says so, and nothing goes without the app lock`() =
+        runTest {
+            coEvery { deposits.rescuable() } returns
+                listOf(DepositRescuable(3, BigInteger.valueOf(700_000), BigInteger.valueOf(100_000)))
+            coEvery { deposits.rescue(3) } throws IllegalStateException("nothing to rescue")
+            start()
+
+            vm.state.value.deposits
+                .single()
+                .recover
+                .onClick()
+            runCurrent()
+            assertEquals(
+                stringRes(R.string.refunds_deposit_recover_failed),
+                vm.state.value.deposits
+                    .single()
+                    .error,
+            )
+
+            coEvery { auth.authenticate(any(), any()) } returns false
+            vm.state.value.deposits
+                .single()
+                .recover
+                .onClick()
+            runCurrent()
+            coVerify(exactly = 1) { deposits.rescue(3) }
+        }
+
     private fun TestScope.start() {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         vm =
             PrivateUsdRefundsVM(
                 records = mockk<ReverseSwapRecords> { every { observeHistory } returns history },
                 repository = repository,
+                deposits = deposits,
+                deployments = mockk<AtomicSwapDeployments> { every { current } returns AtomicSwapTestnet.deployment },
                 auth = auth,
                 observeLocalCurrency =
                     mockk<ObserveLocalCurrencyUseCase> {

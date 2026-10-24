@@ -3,6 +3,7 @@ import { build } from 'esbuild';
 import { copyFile, mkdir, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { sepoliaList } from './sepolia-list-plugin.mjs';
 
 const require = createRequire(import.meta.url);
 const out = path.resolve('../src/main/assets/railgun');
@@ -53,7 +54,8 @@ const result = await build({
     crypto: 'crypto-browserify',
     stream: 'stream-browserify',
   },
-  plugins: [browserBuilds],
+  // Sepolia's transaction list comes from our repaired copy.
+  plugins: [browserBuilds, sepoliaList],
   logLevel: 'warning',
 });
 

@@ -26,6 +26,7 @@ import co.electriccoin.zcash.ui.screen.privateusd.zatoshi
 import co.electriccoin.zcash.ui.screen.privateusd.zecField
 import xyz.justzappit.offramp.atomicswap.RAILGUN_FEE
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.seconds
 
 internal data class ConvertForm(
     val phase: PrivateUsdConvertPhase = PrivateUsdConvertPhase.AMOUNT,
@@ -152,6 +153,19 @@ internal class PrivateUsdConvertTerms(
     private val token = deployment.privateUsdToken
     private val duration: StringResource = deployment.expectedDuration.about()
 
+    // What a maker gone quiet leaves: the claim from t0, the ZEC back from t1, or the claim after the late window.
+    private val quiet: StringResource? =
+        deployment.makerDeadlines?.let { deadlines ->
+            deployment.swap.windows?.let { windows ->
+                stringRes(
+                    R.string.convert_review_info_quiet,
+                    deadlines.t0.about(),
+                    deadlines.t1.about(),
+                    windows.late.seconds.about(),
+                )
+            }
+        }
+
     fun available(holdings: ConvertHoldings): StringResource = holdings.balance.availableText(token, holdings.currency)
 
     fun estimate(
@@ -219,11 +233,12 @@ internal class PrivateUsdConvertTerms(
                 PrivateUsdInfo(
                     title = stringRes(R.string.convert_review_info_title),
                     notes =
-                        listOf(
+                        listOfNotNull(
                             stringRes(R.string.convert_review_info_pay),
                             stringRes(R.string.convert_review_info_receive, basisPoints(RAILGUN_FEE)),
                             stringRes(R.string.convert_review_info_quote),
                             stringRes(R.string.convert_info_note_either),
+                            quiet,
                             stringRes(R.string.convert_info_note_time, duration),
                         ),
                 )
