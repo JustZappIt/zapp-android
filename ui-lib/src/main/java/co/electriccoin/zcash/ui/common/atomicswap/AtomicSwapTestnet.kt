@@ -12,6 +12,7 @@ import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
 import xyz.justzappit.offramp.atomicswap.SwapWindows
 import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
+import xyz.justzappit.offramp.deposits.DepositsPin
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.minutes
@@ -83,6 +84,15 @@ object AtomicSwapTestnet {
                     feeToken = Sepolia.TEST_USD,
                 ),
             makerDeadlines = MakerDeadlines(t0 = 45.minutes, t1 = 105.minutes),
+            // Live since 2026-10-18 (zecSwap's deployments/sepolia-deposits.json), in the test dollar, which anyone may
+            // mint; its fees go to the relayer's deposits account, not its payout one.
+            usdcDeposits =
+                DepositsPin(
+                    chainId = Sepolia.CHAIN_ID,
+                    contract = Address.parse("0x58324e9a866c9690aca08169d3c67630e84c9019"),
+                    token = Sepolia.TEST_USD,
+                    relayer = Address.parse("0xedc4c88a3f6ae8130a2c18babbabd8100cc1a446"),
+                ),
         )
 
     /** The lock contract until 2026-10-21, and its test dollar: its conversions are history, never driven. */

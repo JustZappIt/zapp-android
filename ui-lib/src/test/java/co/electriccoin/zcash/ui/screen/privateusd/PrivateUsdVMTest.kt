@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -78,6 +79,11 @@ class PrivateUsdVMTest {
     private val reverseHistory = MutableStateFlow(emptyList<ReverseSwapRecord>())
     private val sends = MutableStateFlow(PrivateUsdSendHistory())
     private val deposits = MutableStateFlow<PrivateUsdDeposits?>(null)
+    private val depositsRepository =
+        mockk<PrivateUsdDepositsRepository>(relaxed = true) {
+            every { state } returns deposits
+            every { history } returns flowOf(emptyList())
+        }
     private val navigation = mockk<NavigationRouter>(relaxed = true)
     private lateinit var vm: PrivateUsdVM
 
@@ -259,6 +265,18 @@ class PrivateUsdVMTest {
             assertFalse(stringRes(R.string.private_usd_info_receive) in steps)
         }
 
+    @Test
+    fun `the page looks at the deposit addresses as it opens, and every 15 s while it shows`() =
+        runTest {
+            start()
+            verify(exactly = 1) { depositsRepository.refresh() }
+
+            advanceTimeBy(15_001)
+            verify(exactly = 2) { depositsRepository.refresh() }
+            advanceTimeBy(15_000)
+            verify(exactly = 3) { depositsRepository.refresh() }
+        }
+
     private fun TestScope.start() {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val swaps =
@@ -287,6 +305,7 @@ class PrivateUsdVMTest {
                         swaps,
                         reverseSwaps,
                         mockk<PrivateUsdSendLog> { every { observe } returns sends },
+                        depositsRepository,
                     ),
                 observeLocalCurrency =
                     mockk<ObserveLocalCurrencyUseCase> {
@@ -299,7 +318,7 @@ class PrivateUsdVMTest {
                     mockk<PrivateUsdSpendGuard> {
                         every { state } returns MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
                     },
-                depositsRepository = mockk<PrivateUsdDepositsRepository> { every { state } returns deposits },
+                depositsRepository = depositsRepository,
             )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
     }

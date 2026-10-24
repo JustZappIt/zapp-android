@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.privateusd.RailgunSendsPin
 import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
+import xyz.justzappit.offramp.deposits.DepositsPin
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -27,6 +28,12 @@ data class AtomicSwapDeployment(
     val railgunSends: RailgunSendsPin? = null,
     /** When the maker sets a forward swap's deadlines, for the review to tell; none says nothing of them. */
     val makerDeadlines: MakerDeadlines? = null,
+    /**
+     * Where public USDC sent to the wallet's deposit addresses is shielded: the Deposits contract, its token and the
+     * relayer's deposits account, which the relayer's terms must name; none takes no deposits. Not [deposits], the
+     * maker's timing of a conversion's ZEC deposit.
+     */
+    val usdcDeposits: DepositsPin? = null,
 ) {
     /** Zcash confirmations the maker waits for before it marks a deposit ready. */
     val makerConfirmations: Int get() = swap.zcashConfirmations

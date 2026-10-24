@@ -255,6 +255,19 @@
     <string name="convert_result_try_again">Try again</string>
     <string name="convert_result_done">Done</string>
 
+    <!-- Deposits -->
+    <string name="private_usd_activity_deposit">Received %1$s</string>
+    <string name="private_usd_activity_deposit_rescue">Recovered deposit</string>
+    <string name="private_usd_activity_deposit_shielding">shielding…</string>
+    <string name="private_usd_activity_deposit_waiting">waiting for the network</string>
+    <string name="private_usd_activity_deposit_shielded">shielded</string>
+    <string name="refunds_deposit_title">Deposit sent back by screening</string>
+    <string name="refunds_deposit_body">Railgun\'s screening sent %1$s back to your deposit address\'s vault. Recover it to shield it again.</string>
+    <string name="refunds_deposit_fee">The relayer\'s fee, %1$s, comes out of it.</string>
+    <string name="refunds_deposit_recover">Recover deposit</string>
+    <string name="refunds_deposit_recovering">Recovering your deposit…</string>
+    <string name="refunds_deposit_recover_failed">Couldn\'t recover this deposit. Try again.</string>
+
     <!-- Notifications -->
     <string name="private_usd_channel_progress">Shielded USD conversions</string>
     <string name="private_usd_channel_progress_description">Shows while a conversion is running.</string>

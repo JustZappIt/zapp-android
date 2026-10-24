@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
+import xyz.justzappit.offramp.deposits.DepositRecord
 import kotlin.time.Instant
 
 /** One conversion or send made on this device. */
@@ -46,21 +47,35 @@ sealed interface PrivateUsdActivityData {
     ) : PrivateUsdActivityData {
         override val timestamp = received.at
     }
+
+    /** Public USDC a deposit address took in and this device shielded, or a vault's rescue: where it lands, when. */
+    data class Deposit(
+        val record: DepositRecord
+    ) : PrivateUsdActivityData {
+        override val timestamp = Instant.fromEpochSeconds(record.landing?.at ?: record.createdAt)
+    }
 }
 
-/** Every conversion, send and withdrawal made on this device, newest first. */
+/** Every conversion, send, withdrawal and deposit made on this device, newest first. */
 class ObservePrivateUsdActivityUseCase(
     private val atomicSwapRepository: AtomicSwapRepository,
     private val reverseSwapRepository: ReverseSwapRepository,
     private val sendLog: PrivateUsdSendLog,
+    private val depositsRepository: PrivateUsdDepositsRepository,
 ) {
     operator fun invoke(): Flow<List<PrivateUsdActivityData>> =
-        combine(atomicSwapRepository.history, reverseSwapRepository.history, sendLog.observe) { toUsd, toZec, sends ->
+        combine(
+            atomicSwapRepository.history,
+            reverseSwapRepository.history,
+            sendLog.observe,
+            depositsRepository.history,
+        ) { toUsd, toZec, sends, deposits ->
             (
                 toUsd.map(PrivateUsdActivityData::ToUsd) +
                     toZec.map(PrivateUsdActivityData::ToZec) +
                     sends.sends.map(PrivateUsdActivityData::Sent) +
-                    sends.pending.map(PrivateUsdActivityData::Proving)
+                    sends.pending.map(PrivateUsdActivityData::Proving) +
+                    deposits.map(PrivateUsdActivityData::Deposit)
             ).sortedByDescending { it.timestamp }
         }
 }

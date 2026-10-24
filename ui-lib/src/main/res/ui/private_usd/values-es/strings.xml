@@ -237,6 +237,19 @@
     <string name="convert_result_view_balance">Ver USD protegido</string>
     <string name="convert_result_try_again">Intentar de nuevo</string>
     <string name="convert_result_done">Listo</string>
+    <!-- Deposits -->
+    <string name="private_usd_activity_deposit">Recibiste %1$s</string>
+    <string name="private_usd_activity_deposit_rescue">Depósito recuperado</string>
+    <string name="private_usd_activity_deposit_shielding">protegiendo…</string>
+    <string name="private_usd_activity_deposit_waiting">esperando a la red</string>
+    <string name="private_usd_activity_deposit_shielded">protegido</string>
+    <string name="refunds_deposit_title">Depósito devuelto por la revisión</string>
+    <string name="refunds_deposit_body">La revisión de Railgun devolvió %1$s a la bóveda de tu dirección de depósito. Recupéralo para volver a protegerlo.</string>
+    <string name="refunds_deposit_fee">La comisión del relayer, %1$s, se descuenta de él.</string>
+    <string name="refunds_deposit_recover">Recuperar depósito</string>
+    <string name="refunds_deposit_recovering">Recuperando tu depósito…</string>
+    <string name="refunds_deposit_recover_failed">No se pudo recuperar este depósito. Vuelve a intentarlo.</string>
+
     <string name="private_usd_channel_progress">Conversiones de USD protegido</string>
     <string name="private_usd_channel_progress_description">Se muestra mientras se realiza una conversión.</string>
     <string name="private_usd_channel_updates">Novedades de USD protegido</string>

@@ -44,6 +44,8 @@ import org.junit.After
 import org.junit.Test
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.atomicswap.RAILGUN_FEE
+import xyz.justzappit.offramp.deposits.DepositRecord
+import xyz.justzappit.offramp.deposits.DepositRescuable
 import xyz.justzappit.offramp.peer.Bps
 import xyz.justzappit.railgun.RailgunAddress
 import java.math.BigInteger
@@ -315,12 +317,23 @@ class PrivateUsdReceiveVMTest {
 
     private class FakeDeposits : PrivateUsdDepositsRepository {
         override val state = MutableStateFlow<PrivateUsdDeposits?>(null)
+        override val history = flowOf(emptyList<DepositRecord>())
 
         var refreshes = 0
 
         override fun refresh() {
             refreshes++
         }
+
+        override fun onAppUnlocked(isUnlocked: Boolean) = Unit
+
+        override suspend fun rescuable(): List<DepositRescuable> = emptyList()
+
+        override suspend fun rescue(index: Int) = Unit
+
+        override suspend fun ownAddresses(): Set<Address> = emptySet()
+
+        override suspend fun reset() = Unit
     }
 
     private companion object {

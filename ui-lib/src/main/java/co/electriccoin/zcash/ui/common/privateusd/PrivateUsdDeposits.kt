@@ -3,18 +3,24 @@
 
 package co.electriccoin.zcash.ui.common.privateusd
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.deposits.DepositRecord
+import xyz.justzappit.offramp.deposits.DepositRescuable
 import xyz.justzappit.offramp.peer.Bps
 import java.math.BigInteger
 
 /**
- * Public USDC sent to the wallet's deposit addresses, which Zapp shields into the Railgun balance on its own.
+ * Public USDC sent to the wallet's deposit addresses, which Zapp shields into the Railgun balance on its own, with no
+ * step for the user, while Zapp is open and unlocked.
  *
  * The Receive page's USD tab shows [state], and the Shielded USD page's "i" mentions deposits while there is one.
- * Until deposits are built, [NoPrivateUsdDeposits] stands in and the tab stays hidden.
+ * Activity lists [history], Refunds offers what [rescuable] finds, and Withdraw refuses [ownAddresses]. Builds whose
+ * deployment pins no Deposits contract have [NoPrivateUsdDeposits], and the tab stays hidden.
  */
 interface PrivateUsdDepositsRepository {
     /**
@@ -23,8 +29,32 @@ interface PrivateUsdDepositsRepository {
      */
     val state: StateFlow<PrivateUsdDeposits?>
 
-    /** Looks at the deposit addresses again: the USD tab asks as it opens, then on a timer while it shows. */
+    /** Every deposit and rescue kept on this device, newest first, whether or not deposits are taken now. */
+    val history: Flow<List<DepositRecord>>
+
+    /**
+     * Looks at the deposit addresses again: the USD tab asks as it opens, then on a timer while it shows, and so does
+     * the Shielded USD page. Nothing is looked at while Zapp is closed or locked.
+     */
     fun refresh()
+
+    /**
+     * Zapp came to the foreground unlocked ([isUnlocked]), or left it or locked: deposit addresses are looked at only
+     * in between, and a deposit under way waits meanwhile, safe at its address.
+     */
+    fun onAppUnlocked(isUnlocked: Boolean)
+
+    /** What Railgun's screening sent back to the deposit addresses' vaults, beyond what a rescue costs. */
+    suspend fun rescuable(): List<DepositRescuable>
+
+    /** Shields again what deposit address [index]'s vault holds: signed, kept, then posted. */
+    suspend fun rescue(index: Int)
+
+    /** Every deposit address the wallet has given out or could have: sending to one to shield it again is refused. */
+    suspend fun ownAddresses(): Set<Address>
+
+    /** Stops looking, and waits for whatever was under way to stop, for a wallet about to be wiped. */
+    suspend fun reset()
 }
 
 data class PrivateUsdDeposits(
@@ -88,9 +118,21 @@ enum class PrivateUsdDepositPhase {
     NOT_SHIELDING,
 }
 
-/** No deposits in this build yet: no deployment pins a Deposits contract, so the USD tab stays hidden. */
+/** No deposits in this build: its deployment pins no Deposits contract, so the USD tab stays hidden. */
 object NoPrivateUsdDeposits : PrivateUsdDepositsRepository {
     override val state: StateFlow<PrivateUsdDeposits?> = MutableStateFlow<PrivateUsdDeposits?>(null).asStateFlow()
 
+    override val history: Flow<List<DepositRecord>> = flowOf(emptyList())
+
     override fun refresh() = Unit
+
+    override fun onAppUnlocked(isUnlocked: Boolean) = Unit
+
+    override suspend fun rescuable(): List<DepositRescuable> = emptyList()
+
+    override suspend fun rescue(index: Int) = error("this build takes no deposits")
+
+    override suspend fun ownAddresses(): Set<Address> = emptySet()
+
+    override suspend fun reset() = Unit
 }

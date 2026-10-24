@@ -36,11 +36,14 @@ import co.electriccoin.zcash.ui.screen.privateusd.receive.PrivateUsdReceiveArgs
 import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendArgs
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendMode
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlin.time.Duration.Companion.seconds
@@ -63,9 +66,22 @@ class PrivateUsdVM(
     // What deposits take, while public USDC can come in too: the "i" tells of both ways in.
     private val depositSymbol = depositsRepository.state.map { it.symbol() }.distinctUntilChanged()
 
+    // A look at the deposit addresses as the page opens, then another every PASS_INTERVAL while it shows: what arrives
+    // there is shielded with nothing to tap, and its deposit then shows in Activity.
+    private val depositPasses: Flow<Unit> =
+        flow {
+            emit(Unit)
+            while (true) {
+                depositsRepository.refresh()
+                delay(PASS_INTERVAL)
+            }
+        }
+
     internal val state: StateFlow<PrivateUsdState> =
         combine(
-            combine(balanceRepository.observe(), depositSymbol, ::Pair),
+            combine(balanceRepository.observe(), depositSymbol, depositPasses) { balance, symbol, _ ->
+                balance to symbol
+            },
             observeConversion(),
             observeActivity(),
             observeLocalCurrency(),
@@ -248,6 +264,7 @@ class PrivateUsdVM(
 
     private companion object {
         val REFRESH_AFTER = 30.seconds
+        val PASS_INTERVAL = 15.seconds
     }
 }
 

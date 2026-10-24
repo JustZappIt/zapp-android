@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
@@ -49,6 +50,7 @@ class ResetZashiUseCase internal constructor(
     private val reverseSwapRepository: ReverseSwapRepository,
     private val railgunWalletRepository: RailgunWalletRepository,
     private val privateUsdSenders: PrivateUsdSenders,
+    private val privateUsdDeposits: PrivateUsdDepositsRepository,
     private val selectedTabRepository: SelectedTabRepository,
 ) {
     @Suppress("TooGenericExceptionCaught", "ThrowsCount")
@@ -74,8 +76,10 @@ class ResetZashiUseCase internal constructor(
             // Conversions too: a loop still running would write the wiped wallet's swap back.
             atomicSwapRepository.reset()
             reverseSwapRepository.reset()
-            // Private USD's sends, its engine, and the page storage holding the wallet it opened.
+            // Private USD's sends, its deposits, its engine, and the page storage holding the wallet it opened. A
+            // deposit pass still running would write the wiped wallet's deposits back.
             privateUsdSenders.current?.reset()
+            privateUsdDeposits.reset()
             railgunWalletRepository.reset()
             deleteLocalFiles(keepFiles)
             closeSynchronizer()

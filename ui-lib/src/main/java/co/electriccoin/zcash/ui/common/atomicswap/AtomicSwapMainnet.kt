@@ -12,6 +12,7 @@ import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
 import xyz.justzappit.offramp.atomicswap.SwapWindows
 import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
+import xyz.justzappit.offramp.deposits.DepositsPin
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.hours
@@ -82,6 +83,15 @@ object AtomicSwapMainnet {
                     feeToken = Ethereum.USDC,
                 ),
             makerDeadlines = MakerDeadlines(t0 = 90.minutes, t1 = 150.minutes),
+            // Live since 2026-10-19 (zecSwap's deployments/mainnet-deposits.json): it screens depositors with
+            // Chainalysis' oracle, and its fees go to the relayer's deposits account, not its payout one.
+            usdcDeposits =
+                DepositsPin(
+                    chainId = Ethereum.CHAIN_ID,
+                    contract = Address.parse("0xebc7508e20bd4467491ee7e7589d5c7d4c5e8cb6"),
+                    token = Ethereum.USDC,
+                    relayer = Address.parse("0x6ae40b34c32d3feaa0eef53d7e4724160b7a2135"),
+                ),
         )
 
     /** The mainnet beta's lock contract until 2026-10-22: its conversions are history, and nothing drives them. */

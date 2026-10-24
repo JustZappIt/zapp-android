@@ -73,7 +73,10 @@ internal fun PrivateUsdRefundsView(state: PrivateUsdRefundsState) {
                 )
             }
         }
-        if (state.refunds.isEmpty() && state.error == null) {
+        items(state.deposits, key = { "deposit-${it.index}" }) { deposit ->
+            DepositRefund(deposit)
+        }
+        if (state.refunds.isEmpty() && state.deposits.isEmpty() && state.error == null) {
             item {
                 BasicText(
                     text = stringResource(if (state.isLoading) R.string.refunds_checking else R.string.refunds_empty),
@@ -87,6 +90,41 @@ internal fun PrivateUsdRefundsView(state: PrivateUsdRefundsState) {
         }
     }
     state.pinVerify?.let { PinVerifyOverlay(it) }
+}
+
+@Composable
+private fun DepositRefund(deposit: PrivateUsdDepositRefundState) {
+    Column(modifier = Modifier.padding(horizontal = ZappTheme.spacing.gutter, vertical = ZappTheme.spacing.md)) {
+        ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
+            BasicText(
+                text = stringResource(R.string.refunds_deposit_title),
+                style = ZappTheme.typography.rowTitle.copy(color = ZappTheme.colors.text),
+            )
+            BasicText(
+                text = deposit.body.getValue(),
+                style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            BasicText(
+                text = deposit.fee.getValue(),
+                style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
+            )
+            deposit.error?.let { error ->
+                BasicText(
+                    text = error.getValue(),
+                    style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.danger),
+                )
+            }
+            ZappButton(
+                text = deposit.recover.text.getValue(),
+                enabled = deposit.recover.isEnabled,
+                loading = deposit.recover.isLoading,
+                variant = ZappButtonVariant.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = deposit.recover.onClick,
+            )
+        }
+    }
 }
 
 @Composable

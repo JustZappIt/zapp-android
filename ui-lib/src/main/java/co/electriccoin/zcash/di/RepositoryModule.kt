@@ -9,11 +9,11 @@ import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.backgroundScope
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
-import co.electriccoin.zcash.ui.common.privateusd.NoPrivateUsdDeposits
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepositoryImpl
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.privateUsdDeposits
 import co.electriccoin.zcash.ui.common.provider.IdentityVerificationStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
@@ -164,8 +164,19 @@ val repositoryModule =
             )
         }
         single { PrivateUsdSpendGuard(get(), get(), get(), backgroundScope("Private USD spending")) }
-        // Deposits are not built yet: the Receive page's USD tab stays hidden until this binds a repository.
-        single<PrivateUsdDepositsRepository> { NoPrivateUsdDeposits }
+        // None where the deployment pins no Deposits contract: the Receive page's USD tab stays hidden then.
+        single<PrivateUsdDepositsRepository> {
+            privateUsdDeposits(
+                deployments = get(),
+                http = get(named(ATOMIC_SWAP_HTTP)),
+                keys = get(),
+                store = get(),
+                railgunWalletRepository = get(),
+                balanceRepository = lazy { get() },
+                configurationRepository = get(),
+                railgunMnemonicProvider = get(),
+            )
+        }
         singleOf(::LinkPreviewRepository)
         singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
         single<BaseBalanceRepository> {
