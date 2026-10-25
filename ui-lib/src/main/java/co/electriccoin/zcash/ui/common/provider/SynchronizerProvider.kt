@@ -51,6 +51,13 @@ interface SynchronizerProvider {
     val walletBalances: Flow<Map<AccountUuid, AccountBalance>?>
 
     /**
+     * [walletBalances] as of the wallet's last sync, held while it syncs again ([lastSyncedBalances]): read the split
+     * across pools from these. One snapshot for the whole app, so a screen opened mid-sync still sees the last synced
+     * split; each synchronizer starts its own, so a deleted wallet's never reaches the next.
+     */
+    val syncedWalletBalances: StateFlow<Map<AccountUuid, AccountBalance>?>
+
+    /**
      * Get synchronizer and wait for it to be ready.
      */
     suspend fun getSynchronizer(): Synchronizer
@@ -118,6 +125,16 @@ class SynchronizerProviderImpl(
             .flatMapLatest { it?.walletBalances ?: flowOf(null) }
             .onEach { if (it != null) lastKnownWalletBalances.value = it }
             .map { it ?: lastKnownWalletBalances.value }
+
+    override val syncedWalletBalances: StateFlow<Map<AccountUuid, AccountBalance>?> =
+        synchronizer
+            .flatMapLatest { synchronizer ->
+                if (synchronizer == null) flowOf(null) else lastSyncedBalances(walletBalances, synchronizer.status)
+            }.stateIn(
+                scope = scope,
+                started = SharingStarted.Lazily,
+                initialValue = null
+            )
 
     init {
         scope.launch {

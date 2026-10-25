@@ -23,7 +23,8 @@ import kotlinx.coroutines.flow.flow
  * and the wallet asked to migrate them.
  *
  * The engine publishes each tick's balances a moment before its status, so a pair counts only once
- * it has held for [SETTLE_MILLIS].
+ * it has held for [SETTLE_MILLIS]. The snapshot lives as long as the collection: read it through
+ * [SynchronizerProvider.syncedWalletBalances], which keeps one for the whole app.
  */
 @OptIn(FlowPreview::class)
 fun lastSyncedBalances(

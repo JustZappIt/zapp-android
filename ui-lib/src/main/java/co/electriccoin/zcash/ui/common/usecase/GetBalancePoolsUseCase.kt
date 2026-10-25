@@ -4,7 +4,6 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.extension.ZERO
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
-import co.electriccoin.zcash.ui.common.provider.lastSyncedBalances
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -38,8 +37,8 @@ import kotlinx.coroutines.flow.map
  * at all, no async correction call to race against the balance stream, no window where the two can
  * disagree.
  *
- * The split is the one from the wallet's last sync ([lastSyncedBalances]): while a sync scans an
- * account a conversion just imported, the SDK reports Ironwood funds as Orchard.
+ * The split is the one from the wallet's last sync ([SynchronizerProvider.syncedWalletBalances]):
+ * while a sync scans an account a conversion just imported, the SDK reports Ironwood funds as Orchard.
  */
 class GetBalancePoolsUseCase(
     private val synchronizerProvider: SynchronizerProvider,
@@ -56,7 +55,7 @@ class GetBalancePoolsUseCase(
             if (synchronizer == null || account == null) {
                 flowOf(null)
             } else {
-                lastSyncedBalances(synchronizerProvider.walletBalances, synchronizer.status).map { balances ->
+                synchronizerProvider.syncedWalletBalances.map { balances ->
                     val balance = balances?.get(account.sdkAccount.accountUuid)
                     val orchard = (balance?.orchard?.total ?: Zatoshi.ZERO) + (balance?.orchard?.locked ?: Zatoshi.ZERO)
                     val sapling = (balance?.sapling?.total ?: Zatoshi.ZERO) + (balance?.sapling?.locked ?: Zatoshi.ZERO)
