@@ -35,6 +35,7 @@ class ReverseSwapDriver(
     private val submission = ReverseFundingSubmission(funding, store, lock)
     private val opening = ReverseSwapOpening(maker, chain, submission::submit, store, ending, lock)
     private val receiving = ReverseSwapReceiving(deployment, zcash, store, ending)
+    private val retirement = ReverseSwapRetirement(verifier, chain, receiving, store, ending)
     private val refunds =
         ReverseSwapRefunds(deployment, relayer, chain, keys, reverseKeys, store, verifier, ending, nowSeconds)
     private val approvals = ReverseSwapApprovals(records, verifier, reverseKeys, store, nowSeconds)
@@ -114,13 +115,13 @@ class ReverseSwapDriver(
             val current = store.active()?.takeIf { it.underWay }
             when {
                 current == null -> Unit
-                deployment.retired -> ending.retire(current)
+                deployment.retired -> retirement.advance(current, outbox)
                 else -> stages.advance(current, deposit?.takeIf { current.index == snapshot.index }, outbox)
             }
         }
         store.active()?.takeIf { it.isAccepting }?.let { accepted(it.index) }
-        // The maker hands the accept's token back once the escrow is funded.
-        if (snapshot.funding != null) maker.collectReverseToken(snapshot.swapId)
+        // The maker hands the accept's token back once the escrow is funded; a retired contract's maker is never asked.
+        if (snapshot.funding != null && !deployment.retired) maker.collectReverseToken(snapshot.swapId)
         return store.active()
     }
 
@@ -608,15 +609,66 @@ internal class ReverseSwapEnding(
         store.save(record.copy(phase = phase))
         zcash.forget(record)
     }
+}
 
-    // A conversion on a retired lock contract follows rules this build doesn't: nothing is signed, paid, or asked of a
-    // maker or relayer for it. One that never paid ends, called off; one that did is refused, its escrow left as it is.
-    suspend fun retire(record: ReverseSwapRecord) {
-        if (record.funding != null) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "the escrow is on a lock contract")
+/**
+ * A conversion on a retired lock contract follows rules this build doesn't: nothing is signed, paid, or asked of a
+ * maker or relayer for it, and only the chain is read. One that never paid, or whose funding the chain shows never
+ * landed, ends called off. One its maker claimed comes home by the sweep, the user's alone on Zcash with the share the
+ * claim revealed; one refunded and paid out ends refunded. Any other is refused, its escrow left as it is, and looked
+ * at again until the chain settles it.
+ */
+internal class ReverseSwapRetirement(
+    private val verifier: ReverseSwapVerifier,
+    private val chain: ReverseSwapChain,
+    private val receiving: ReverseSwapReceiving,
+    private val store: ReverseSwapStore,
+    private val ending: ReverseSwapEnding,
+) {
+    suspend fun advance(
+        record: ReverseSwapRecord,
+        outbox: ReverseOutbox,
+    ) {
+        val funding = record.funding
+        if (funding == null) {
+            ending.finish(record, ReversePhase.CANCELLED)
+            return
         }
-        finish(record, ReversePhase.CANCELLED)
+        val observed = verifier.state(record)
+        val escrow = observed.swap
+        when {
+            escrow == null -> {
+                if (!neverLanded(record, funding, observed)) refused()
+                ending.finish(record, ReversePhase.CANCELLED)
+            }
+
+            escrow.stage == SwapStage.CLAIMED -> {
+                val settled = record.copy(phase = ReversePhase.RECEIVING)
+                store.keep(record, settled)
+                receiving.receive(settled, escrow.secret, outbox)
+            }
+
+            escrow.stage == SwapStage.REFUNDED && escrow.paidOut -> {
+                ending.finish(record, ReversePhase.REFUNDED)
+            }
+
+            else -> {
+                refused()
+            }
+        }
     }
+
+    // openReverse reverts past the funding deadline: once that is well behind the chain, no escrow is coming.
+    private suspend fun neverLanded(
+        record: ReverseSwapRecord,
+        funding: ReverseFundingTransaction,
+        observed: ReverseChainState,
+    ): Boolean =
+        observed.now > record.quote.fundingDeadline + FUNDING_SETTLED_AFTER_SECONDS ||
+            funding.txId?.let { chain.fundingStatus(it) } == TransactionStatus.REVERTED
+
+    private fun refused(): Nothing =
+        throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "the escrow is on a lock contract")
 }
 
 private val ENDS_ACCEPTANCE =

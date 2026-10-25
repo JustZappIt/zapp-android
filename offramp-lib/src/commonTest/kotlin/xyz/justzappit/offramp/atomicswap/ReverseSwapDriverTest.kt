@@ -5,6 +5,7 @@ package xyz.justzappit.offramp.atomicswap
 
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.evm.rpc.TransactionStatus
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
@@ -492,6 +493,84 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             assertTrue(funded.relayed.isEmpty())
             assertEquals(0, funded.accepts)
         }
+
+    @Test
+    fun aRetiredConversionItsMakerClaimedComesHomeOnZcashAlone() =
+        runTest {
+            val h = Harness(LOCKS)
+            h.saved = retiredFunded(ReversePhase.SETTLING)
+            h.escrow = h.swap(SwapStage.CLAIMED)
+            h.driver.advance()
+            assertEquals(ReversePhase.RECEIVING, h.record.phase)
+            assertEquals(1, h.receiveSubmits)
+
+            h.received = ZcashTransactionStatus.Mined(DEPLOYMENT.zcashConfirmations.toLong())
+            h.driver.advance()
+            assertEquals(ReversePhase.COMPLETE, h.record.phase)
+            assertEquals(1, h.receivePrepares, "the kept sweep is the one sent")
+            assertEquals(1, h.forgets)
+            assertTrue(h.relayed.isEmpty())
+            assertEquals(0, h.accepts)
+            assertEquals(0, h.tokenCollects, "a retired contract's maker is never asked")
+        }
+
+    @Test
+    fun aRetiredEscrowStillHeldIsRefusedAndOneRefundedAndPaidOutEnds() =
+        runTest {
+            for (stage in listOf(SwapStage.OPEN, SwapStage.READY, SwapStage.REFUNDED)) {
+                val h = Harness(LOCKS)
+                h.saved = retiredFunded(ReversePhase.SETTLING)
+                h.escrow = h.swap(stage)
+                val refused = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance() }
+                assertEquals(AtomicSwapBlock.RETIRED_CONTRACT, refused.reason, "$stage")
+                assertEquals(ReversePhase.SETTLING, h.record.phase)
+                assertEquals(0, h.receivePrepares)
+                assertEquals(0, h.forgets)
+            }
+
+            val refunded = Harness(LOCKS)
+            refunded.saved = retiredFunded(ReversePhase.REFUNDING)
+            refunded.paidOut = true
+            refunded.escrow = refunded.swap(SwapStage.REFUNDED)
+            refunded.driver.advance()
+            assertEquals(ReversePhase.REFUNDED, refunded.record.phase)
+            assertEquals(1, refunded.forgets)
+            assertEquals(0, refunded.payoutCalls)
+            assertTrue(refunded.relayed.isEmpty())
+        }
+
+    @Test
+    fun aRetiredFundingThatNeverLandedEndsCalledOffAndOneThatStillMightIsRefused() =
+        runTest {
+            val pending = Harness(LOCKS)
+            pending.saved = retiredFunded(ReversePhase.SENDING_USDC)
+            val refused = assertFailsWith<AtomicSwapBlockedException> { pending.driver.advance() }
+            assertEquals(AtomicSwapBlock.RETIRED_CONTRACT, refused.reason)
+            assertEquals(ReversePhase.SENDING_USDC, pending.record.phase)
+            assertTrue(pending.submissions.isEmpty(), "its funding is never sent again")
+
+            val reverted = Harness(LOCKS)
+            reverted.saved = retiredFunded(ReversePhase.SENDING_USDC)
+            reverted.fundingState = TransactionStatus.REVERTED
+            reverted.driver.advance()
+            assertEquals(ReversePhase.CANCELLED, reverted.record.phase)
+
+            val lapsed = Harness(LOCKS)
+            lapsed.saved = retiredFunded(ReversePhase.CONFIRMING_ESCROW)
+            lapsed.now = FUNDING + FUNDING_SETTLED_AFTER_SECONDS + 1
+            lapsed.driver.advance()
+            assertEquals(ReversePhase.CANCELLED, lapsed.record.phase)
+            assertEquals(1, lapsed.forgets)
+            assertTrue(lapsed.submissions.isEmpty())
+        }
+
+    // A conversion funded on the live contract, as kept on a retired one.
+    private suspend fun retiredFunded(phase: ReversePhase): ReverseSwapRecord {
+        val live = Harness()
+        live.prepared()
+        live.driver.fund(0)
+        return live.record.copy(deployment = LOCKS, phase = phase)
+    }
 
     @Test
     fun aKeptReadyIsSentAgainOnlyWhileTheEscrowIsOpen() =

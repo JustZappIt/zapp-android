@@ -72,6 +72,7 @@ abstract class ReverseSwapDriverFixtures {
         /** Refunds the relayer answers `503` before it takes one. */
         var busyRefunds = 0
         var accepts = 0
+        var tokenCollects = 0
         var prepares = 0
         var saves = 0
         var readyCalls = 0
@@ -191,7 +192,9 @@ abstract class ReverseSwapDriverFixtures {
             return SwapAccepted(record.swapId, record.quote.readyDeadline, record.quote.refundAfter, acceptTicket)
         }
 
-        override suspend fun collectReverseToken(swapId: SwapId) = Unit
+        override suspend fun collectReverseToken(swapId: SwapId) {
+            tokenCollects++
+        }
 
         override suspend fun quote(
             amount: Usdc6,
@@ -458,6 +461,9 @@ abstract class ReverseSwapDriverFixtures {
                 RELAYER,
                 windows = WINDOWS,
             )
+
+        /** The same deployment as a retired lock contract, whose conversions this build no longer drives. */
+        val LOCKS = DEPLOYMENT.copy(windows = null)
 
         fun hex(bytes: Int, value: Int) = "0x" + value.toString(16).padStart(2, '0').repeat(bytes)
 
