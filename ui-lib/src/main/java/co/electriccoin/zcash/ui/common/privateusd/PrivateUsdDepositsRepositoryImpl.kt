@@ -60,7 +60,7 @@ class PrivateUsdDepositsRepositoryImpl(
     // Built only once a deposit lands: building it sets up the conversions and their stores.
     private val balanceRepository: Lazy<PrivateUsdBalanceRepository>,
     private val configurationRepository: ConfigurationRepository,
-    railgunMnemonicProvider: RailgunMnemonicProvider,
+    private val railgunMnemonicProvider: RailgunMnemonicProvider,
     private val scope: CoroutineScope,
     private val clock: Clock,
 ) : PrivateUsdDepositsRepository {
@@ -86,11 +86,13 @@ class PrivateUsdDepositsRepositoryImpl(
 
     init {
         start()
-        // A wallet deleted and replaced in this process starts over, its addresses unknown until a pass.
+        // A wallet deleted and replaced in this process starts over, its addresses unknown until a pass, and the passes
+        // a reset stopped start again once the new wallet is there.
         scope.launch {
             railgunMnemonicProvider.walletChanges.drop(1).collect {
                 lastTerms = null
                 mutableState.value = PrivateUsdDeposits(token, address = null)
+                if (railgunMnemonicProvider.hasWallet()) start()
                 wake.trySend(Unit)
             }
         }
@@ -122,25 +124,29 @@ class PrivateUsdDepositsRepositoryImpl(
 
     override suspend fun ownAddresses(): Set<Address> = depositor.ownAddresses()
 
+    // Stopped until another wallet replaces this one: a pass while the wallet is wiped would read its records as
+    // they're cleared, post its kept requests again, and write the records back for the next wallet to show and
+    // wait on.
     override suspend fun reset() {
-        synchronized(this) { passes }?.cancelAndJoin()
+        synchronized(this) { passes.also { passes = null } }?.cancelAndJoin()
         lastTerms = null
         mutableState.value = PrivateUsdDeposits(token, address = null)
-        start()
     }
 
     private fun start() {
-        val loop =
-            scope.launch {
-                while (true) {
-                    isUnlocked.first { it }
-                    // What asked meanwhile is this pass.
-                    wake.tryReceive()
-                    val next = passNow()
-                    withTimeoutOrNull(next ?: Duration.INFINITE) { wake.receive() }
+        synchronized(this) {
+            if (passes != null) return
+            passes =
+                scope.launch {
+                    while (true) {
+                        isUnlocked.first { it }
+                        // What asked meanwhile is this pass.
+                        wake.tryReceive()
+                        val next = passNow()
+                        withTimeoutOrNull(next ?: Duration.INFINITE) { wake.receive() }
+                    }
                 }
-            }
-        synchronized(this) { passes = loop }
+        }
     }
 
     // When to look again; none until something asks. A pass that can't run at all, with a store that doesn't read or
@@ -205,6 +211,12 @@ class PrivateUsdDepositsRepositoryImpl(
         val CONFIGURATION_WAIT = 5.seconds
     }
 }
+
+// None between a reset and the wallet that replaces it: the seed is gone.
+private suspend fun RailgunMnemonicProvider.hasWallet(): Boolean =
+    runCatching { address() }
+        .onFailure { if (it is CancellationException) throw it }
+        .isSuccess
 
 /**
  * This build's deposits: its deployment's relayer, over [http], which never retries, and its chain, or none where the

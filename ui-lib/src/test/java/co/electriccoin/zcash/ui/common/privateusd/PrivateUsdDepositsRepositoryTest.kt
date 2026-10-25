@@ -17,8 +17,8 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -36,6 +36,7 @@ import xyz.justzappit.offramp.deposits.Depositor
 import xyz.justzappit.offramp.deposits.ScannedAddress
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.peer.Bps
+import xyz.justzappit.railgun.RailgunAddress
 import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -56,6 +57,10 @@ class PrivateUsdDepositsRepositoryTest {
     private var isShieldedUsdOn = true
     private var next: DepositPass = pass()
     private var passes = 0
+
+    // As the provider's: the current wallet first, then each that replaces it.
+    private val walletChanges = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+    private var hasWallet = true
 
     init {
         coEvery { depositor.pass(any()) } answers {
@@ -244,9 +249,16 @@ class PrivateUsdDepositsRepositoryTest {
             assertNotNull(repository.state.value?.address)
 
             repository.reset()
-
             assertEquals(PrivateUsdDeposits(TOKEN, address = null), repository.state.value)
+            // The wipe goes on with no wallet: nothing reads, posts or writes back the wiped wallet's deposits.
+            hasWallet = false
+            walletChanges.emit(Unit)
             repository.refresh()
+            runCurrent()
+            assertEquals(1, passes)
+
+            hasWallet = true
+            walletChanges.emit(Unit)
             runCurrent()
             assertEquals(2, passes)
         }
@@ -281,7 +293,11 @@ class PrivateUsdDepositsRepositoryTest {
                             ),
                         )
                 },
-            railgunMnemonicProvider = mockk<RailgunMnemonicProvider> { every { walletChanges } returns flowOf(Unit) },
+            railgunMnemonicProvider =
+                mockk<RailgunMnemonicProvider> {
+                    every { walletChanges } returns this@PrivateUsdDepositsRepositoryTest.walletChanges
+                    coEvery { address() } answers { if (hasWallet) WALLET else error("no wallet") }
+                },
             scope = backgroundScope,
             clock =
                 object : Clock {
@@ -291,6 +307,11 @@ class PrivateUsdDepositsRepositoryTest {
 
     private companion object {
         const val NOW = 1_792_800_000L
+        val WALLET =
+            RailgunAddress(
+                "0zk1qyrs4qyrd08p6uep0fc2y8njktgcpezts3rpaq6q0ln948ecjkw8prv7j6f" +
+                    "e3z53llz8ursderja0juwv5pgnv8x5klmmwkv8q38h9n704h4d4qjyw7n5qk68nx"
+            )
         val TOKEN = AtomicSwapTestnet.deployment.privateUsdToken
         val TERMS =
             DepositTerms(
