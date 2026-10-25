@@ -37,6 +37,13 @@ test('the sender shows only where it showed itself, and a missing time is null',
   assert.equal(hidden.timestamp, null);
 });
 
+test('a send heard live has its time in whole seconds', () => {
+  const [heard] = receivedSends([
+    item(TransactionHistoryItemCategory.TransferReceiveERC20s, [amount(1n)], { timestamp: 1790000000.734 }),
+  ]);
+  assert.equal(heard.timestamp, 1790000000);
+});
+
 test('shields, sends, withdrawals and mixed items are not received sends', () => {
   const others = [
     TransactionHistoryItemCategory.ShieldERC20s,
