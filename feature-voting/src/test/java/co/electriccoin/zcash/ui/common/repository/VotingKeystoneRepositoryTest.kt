@@ -717,6 +717,7 @@ class VotingKeystoneRepositoryTest {
         override val synchronizer: StateFlow<Synchronizer?> = MutableStateFlow(null)
         override val isSeedMismatch: StateFlow<Boolean> = MutableStateFlow(false)
         override val walletBalances: Flow<Map<AccountUuid, AccountBalance>?> = flowOf(null)
+        override val syncedWalletBalances: StateFlow<Map<AccountUuid, AccountBalance>?> = MutableStateFlow(null)
 
         private val fakeSynchronizer: Synchronizer =
             mockk<Synchronizer>(relaxed = true).also { every { it.network } returns ZcashNetwork.Mainnet }
