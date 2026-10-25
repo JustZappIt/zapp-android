@@ -35,6 +35,21 @@ internal class ReverseSwapVerifier(
         return state
     }
 
+    /**
+     * The escrow and the newest block, the one as of the other: what a ready and a refund are judged on. The rest of
+     * what [state] checks of the record holds already.
+     */
+    suspend fun latest(record: ReverseSwapRecord): SwapRead {
+        check(record.deployment == deployment) { "the conversion belongs to another deployment" }
+        return chain.swapNow(record.swapId, record.terms)
+    }
+
+    /** The windows of the contract the deployment pins; a retired lock contract's conversions are never driven. */
+    val windows: SwapWindows
+        get() =
+            deployment.windows
+                ?: throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "a lock contract has no windows")
+
     /** The relayer's terms, when they serve [record]'s deployment for no more than the swap allows. */
     suspend fun relayerTerms(record: ReverseSwapRecord): RelayerTerms =
         relayer.terms().also { it.checkedFee(record.deployment, record.quote.terms.amount) }

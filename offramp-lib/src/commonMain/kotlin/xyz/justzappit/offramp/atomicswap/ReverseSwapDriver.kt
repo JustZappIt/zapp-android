@@ -35,8 +35,10 @@ class ReverseSwapDriver(
     private val submission = ReverseFundingSubmission(funding, store, lock)
     private val opening = ReverseSwapOpening(maker, chain, submission::submit, store, ending, lock)
     private val receiving = ReverseSwapReceiving(deployment, zcash, store, ending)
-    private val refunds = ReverseSwapRefunds(relayer, chain, keys, reverseKeys, store, verifier, ending, nowSeconds)
-    private val approvals = ReverseSwapApprovals(records, verifier, reverseKeys, store)
+    private val retirement = ReverseSwapRetirement(verifier, chain, receiving, store, ending)
+    private val refunds =
+        ReverseSwapRefunds(deployment, relayer, chain, keys, reverseKeys, store, verifier, ending, nowSeconds)
+    private val approvals = ReverseSwapApprovals(records, verifier, reverseKeys, store, nowSeconds)
     private val stages = ReverseSwapStages(verifier, opening, receiving, refunds, store, relayer)
 
     // Checked once: every quote is checked against the deployment as well.
@@ -45,6 +47,7 @@ class ReverseSwapDriver(
     /** A verified quote for [requested], kept as a preview under a fresh index. */
     suspend fun quote(requested: Usdc6): ReverseSwapRecord {
         require(requested.micros.signum() > 0) { "a conversion moves something" }
+        val windows = deployment.requireWindows()
         records.requireNothingUnderWay()
         if (!isMakerChecked) {
             maker.info().requireServing(deployment, reverse = true)
@@ -70,7 +73,7 @@ class ReverseSwapDriver(
                 fixedHex(quote.terms.makerProof, SWAP_SHARE_BYTES),
             )
         val id = ReverseSwapId.of(user, quote.terms.makerShare)
-        requireTimeToGoAhead(quote, chain.read(id, SwapTerms.reverse(quote, acceptance.userShare)).now)
+        requireTimeToGoAhead(quote, chain.read(id, SwapTerms.reverse(quote, acceptance.userShare)).now, windows)
         val record =
             ReverseSwapRecord(
                 index = index,
@@ -93,6 +96,7 @@ class ReverseSwapDriver(
     /** The user went ahead with the preview: it's under way from here, though nothing is paid yet. */
     suspend fun goAhead(index: Int) =
         lock.withLock {
+            deployment.requireWindows()
             val record = records.current(index)
             if (record.phase != ReversePhase.QUOTED) return@withLock
             if (forward.active()?.finished == false) {
@@ -105,21 +109,25 @@ class ReverseSwapDriver(
     suspend fun advance(): ReverseSwapRecord? {
         val snapshot = store.active()
         if (snapshot == null || !snapshot.underWay) return snapshot
-        val deposit = if (snapshot.phase in AWAITING_DEPOSIT) receiving.lookAtDeposit(snapshot) else null
+        val deposit =
+            if (snapshot.phase in AWAITING_DEPOSIT && !deployment.retired) receiving.lookAtDeposit(snapshot) else null
         locked { outbox ->
-            store
-                .active()
-                ?.takeIf { it.underWay }
-                ?.let { stages.advance(it, deposit?.takeIf { _ -> it.index == snapshot.index }, outbox) }
+            val current = store.active()?.takeIf { it.underWay }
+            when {
+                current == null -> Unit
+                deployment.retired -> retirement.advance(current, outbox)
+                else -> stages.advance(current, deposit?.takeIf { current.index == snapshot.index }, outbox)
+            }
         }
         store.active()?.takeIf { it.isAccepting }?.let { accepted(it.index) }
-        // The maker hands the accept's token back once the escrow is funded.
-        if (snapshot.funding != null) maker.collectReverseToken(snapshot.swapId)
+        // The maker hands the accept's token back once the escrow is funded; a retired contract's maker is never asked.
+        if (snapshot.funding != null && !deployment.retired) maker.collectReverseToken(snapshot.swapId)
         return store.active()
     }
 
     /** Only the first foreground authorization calls this. The transaction is kept before it is first sent. */
     suspend fun fund(index: Int) {
+        deployment.requireWindows()
         accepted(index)
         val record = lock.withLock { approvals.fundable(index) }
         if (record.funding != null) {
@@ -145,6 +153,7 @@ class ReverseSwapDriver(
 
     /** Only the second foreground authorization calls this; a restart never authorizes `ready`. */
     suspend fun ready(index: Int) {
+        deployment.requireWindows()
         val snapshot = records.current(index)
         requireGoingAhead(snapshot)
         if (snapshot.ready != null) {
@@ -182,9 +191,12 @@ class ReverseSwapDriver(
     }
 
     /** Recovers the refund of conversion [index], whichever conversion is active now. */
-    suspend fun rescue(index: Int) = locked { outbox -> refunds.rescue(records.kept(index), outbox) }
+    suspend fun rescue(index: Int) {
+        deployment.requireWindows()
+        locked { outbox -> refunds.rescue(records.kept(index), outbox) }
+    }
 
-    suspend fun canRescue(index: Int): Boolean = refunds.canRescue(records.kept(index))
+    suspend fun canRescue(index: Int): Boolean = !deployment.retired && refunds.canRescue(records.kept(index))
 
     /** Runs [step] under the lock, then sends what it kept once the lock is let go. */
     private suspend fun <T> locked(step: suspend (ReverseOutbox) -> T): T {
@@ -214,7 +226,9 @@ class ReverseSwapDriver(
             get() = underWay && account == null && funding == null && !cancelRequested
 
         fun requireGoingAhead(record: ReverseSwapRecord) =
-            check(record.underWay && !record.cancelRequested) { "the conversion isn't waiting on the user" }
+            check(record.underWay && !record.cancelRequested && record.refundPostedAt == null) {
+                "the conversion isn't waiting on the user"
+            }
 
         fun requireQuoteHolds(
             quote: ReverseQuote,
@@ -227,22 +241,33 @@ class ReverseSwapDriver(
 
         fun requireTimeToGoAhead(
             quote: ReverseQuote,
-            now: Long
+            now: Long,
+            windows: SwapWindows,
         ) {
             requireQuoteHolds(quote, now)
-            if (quote.readyDeadline <= now + MIN_SECONDS_TO_T0 || quote.refundAfter > now + MAX_READY_WAIT) {
+            val isLong = quote.readyDeadline > now + MIN_SECONDS_TO_T0 && quote.refundAfter <= now + MAX_READY_WAIT
+            if (!isLong || !quote.fitsWindows(windows)) {
                 throw AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "the deadlines leave too little time")
             }
         }
 
         fun requireTimeToFund(
             quote: ReverseQuote,
-            now: Long
+            now: Long,
+            windows: SwapWindows,
         ) {
             if (now >= quote.fundingDeadline || quote.readyDeadline <= now + MIN_SECONDS_TO_T0) {
                 throw AtomicSwapBlockedException(AtomicSwapBlock.QUOTE_EXPIRED, "too late to fund it")
             }
+            if (!quote.fitsWindows(windows)) {
+                throw AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "the deadlines leave too little time")
+            }
         }
+
+        // openReverse refuses a t0 under the contract's least window from when it lands, at its funding deadline at the
+        // latest, or a t1 under it from t0.
+        private fun ReverseQuote.fitsWindows(windows: SwapWindows): Boolean =
+            readyDeadline - fundingDeadline >= windows.min && refundAfter - readyDeadline >= windows.min
     }
 }
 
@@ -273,6 +298,7 @@ internal class ReverseSwapApprovals(
     private val verifier: ReverseSwapVerifier,
     private val reverseKeys: ReverseSwapKeys,
     private val store: ReverseSwapStore,
+    private val nowSeconds: () -> Long,
 ) {
     // A conversion under way, not called off, with no escrow yet and time left to fund it.
     suspend fun fundable(index: Int): ReverseSwapRecord {
@@ -284,10 +310,15 @@ internal class ReverseSwapApprovals(
         if (observed.swap != null) {
             throw AtomicSwapBlockedException(AtomicSwapBlock.UNDER_WAY_ON_CHAIN, "its escrow is open already")
         }
-        ReverseSwapDriver.requireTimeToFund(record.quote, observed.now)
+        ReverseSwapDriver.requireTimeToFund(record.quote, observed.now, verifier.windows)
         return record
     }
 
+    /**
+     * The ready, signed only on an escrow still open on the newest block with its whole life before `t0`, from which
+     * none is taken, and never after a refund was asked for. Its deadline is kept with the record before the signature
+     * leaves: a refund waits until the chain is past it.
+     */
     suspend fun authorizeReady(
         index: Int,
         estimate: ReverseReceiveEstimate,
@@ -295,18 +326,25 @@ internal class ReverseSwapApprovals(
         val record = records.current(index)
         ReverseSwapDriver.requireGoingAhead(record)
         record.ready?.let { return it }
-        val observed = verifier.state(record)
-        val escrow =
-            observed.swap
-                ?: throw AtomicSwapBlockedException(AtomicSwapBlock.DEPOSIT_UNCONFIRMED, "the escrow isn't confirmed")
-        val isOpen = escrow.stage == SwapStage.OPEN && escrow.refundLockUntil == 0L
-        if (!isOpen || observed.now + SIGNATURE_TTL_SECONDS >= record.quote.readyDeadline) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.DEADLINE_PASSED, "too late to authorize settlement")
+        if (verifier.state(record).swap == null) {
+            throw AtomicSwapBlockedException(AtomicSwapBlock.DEPOSIT_UNCONFIRMED, "the escrow isn't confirmed")
         }
-        val deadline = observed.now + SIGNATURE_TTL_SECONDS
+        val deadline = readyHead(record) + SIGNATURE_TTL_SECONDS
         val authorized = SwapAuthorization(record.swapId, deadline, reverseKeys.signReady(record, deadline).hex())
         store.save(record.copy(ready = authorized, phase = ReversePhase.SETTLING, receiveEstimate = estimate))
         return authorized
+    }
+
+    // The newest block's time, once a ready signed on it may land: on an escrow still open there, before t0.
+    private suspend fun readyHead(record: ReverseSwapRecord): Long {
+        val read = verifier.latest(record)
+        val head = freshHead(read.head.time, nowSeconds())
+        val escrow =
+            read.swap ?: throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_LAGGING, "the newest block shows none")
+        if (reverseReady(escrow.stage, escrow.t0, read.head, SIGNATURE_TTL_SECONDS) != null) {
+            throw AtomicSwapBlockedException(AtomicSwapBlock.DEADLINE_PASSED, "too late to authorize settlement")
+        }
+        return head
     }
 }
 
@@ -346,10 +384,10 @@ internal class ReverseSwapStages(
                 store.keep(record, record.copy(phase = ReversePhase.SETTLING))
             }
 
-            // A `ready` the user signed is sent again while it holds, and never signed again after.
+            // A `ready` the user signed is sent again while it holds on an open escrow, and never signed again after.
             ready != null -> {
                 val lapsed = observed.now > ready.deadline
-                if (!lapsed && escrow.refundLockUntil == 0L) {
+                if (!lapsed && escrow.stage == SwapStage.OPEN && record.refundPostedAt == null) {
                     outbox.send { relayer.ready(ready, record.terms, record.ticket) }
                 }
                 store.keep(record, record.copy(phase = if (lapsed) ReversePhase.REFUND_WAIT else ReversePhase.SETTLING))
@@ -514,7 +552,8 @@ internal class ReverseSwapReceiving(
                     ReversePhase.SETTLING
                 }
 
-                escrow.refundLockUntil != 0L || observed.now + SIGNATURE_TTL_SECONDS >= record.quote.readyDeadline -> {
+                // A ready can't be signed with its whole life before t0 any more: the escrow can only come back.
+                observed.now + SIGNATURE_TTL_SECONDS >= record.quote.readyDeadline -> {
                     ReversePhase.REFUND_WAIT
                 }
 
@@ -572,6 +611,66 @@ internal class ReverseSwapEnding(
     }
 }
 
+/**
+ * A conversion on a retired lock contract follows rules this build doesn't: nothing is signed, paid, or asked of a
+ * maker or relayer for it, and only the chain is read. One that never paid, or whose funding the chain shows never
+ * landed, ends called off. One its maker claimed comes home by the sweep, the user's alone on Zcash with the share the
+ * claim revealed; one refunded and paid out ends refunded. Any other is refused, its escrow left as it is, and looked
+ * at again until the chain settles it.
+ */
+internal class ReverseSwapRetirement(
+    private val verifier: ReverseSwapVerifier,
+    private val chain: ReverseSwapChain,
+    private val receiving: ReverseSwapReceiving,
+    private val store: ReverseSwapStore,
+    private val ending: ReverseSwapEnding,
+) {
+    suspend fun advance(
+        record: ReverseSwapRecord,
+        outbox: ReverseOutbox,
+    ) {
+        val funding = record.funding
+        if (funding == null) {
+            ending.finish(record, ReversePhase.CANCELLED)
+            return
+        }
+        val observed = verifier.state(record)
+        val escrow = observed.swap
+        when {
+            escrow == null -> {
+                if (!neverLanded(record, funding, observed)) refused()
+                ending.finish(record, ReversePhase.CANCELLED)
+            }
+
+            escrow.stage == SwapStage.CLAIMED -> {
+                val settled = record.copy(phase = ReversePhase.RECEIVING)
+                store.keep(record, settled)
+                receiving.receive(settled, escrow.secret, outbox)
+            }
+
+            escrow.stage == SwapStage.REFUNDED && escrow.paidOut -> {
+                ending.finish(record, ReversePhase.REFUNDED)
+            }
+
+            else -> {
+                refused()
+            }
+        }
+    }
+
+    // openReverse reverts past the funding deadline: once that is well behind the chain, no escrow is coming.
+    private suspend fun neverLanded(
+        record: ReverseSwapRecord,
+        funding: ReverseFundingTransaction,
+        observed: ReverseChainState,
+    ): Boolean =
+        observed.now > record.quote.fundingDeadline + FUNDING_SETTLED_AFTER_SECONDS ||
+            funding.txId?.let { chain.fundingStatus(it) } == TransactionStatus.REVERTED
+
+    private fun refused(): Nothing =
+        throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "the escrow is on a lock contract")
+}
+
 private val ENDS_ACCEPTANCE =
     setOf(
         AtomicSwapBlock.MISMATCH,
@@ -606,7 +705,7 @@ private fun lastWord(code: SwapErrorCode): AtomicSwapBlockedException? =
             AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "the maker refused the quote's acceptance")
         }
 
-        SwapErrorCode.INTERNAL, SwapErrorCode.ALREADY_SPENT -> {
+        SwapErrorCode.INTERNAL, SwapErrorCode.ALREADY_SPENT, SwapErrorCode.CONFLICT -> {
             null
         }
     }

@@ -5,6 +5,7 @@ package xyz.justzappit.offramp.atomicswap
 
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.evm.rpc.TransactionStatus
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
@@ -111,8 +112,6 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.driver.fund(0)
             h.funded()
             h.driver.cancel(0)
-            h.refundUntil = h.now + 600
-            h.driver.advance()
             h.escrow = h.swap(SwapStage.REFUNDED)
             h.driver.advance()
             h.paidOut = true
@@ -120,7 +119,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.driver.rescue(0)
 
             assertEquals(ReversePhase.REFUNDED, h.record.phase)
-            assertEquals(listOf("fund", "lockRefund", "refund", "refundPayout", "rescue"), h.relayed.map { it.first })
+            assertEquals(listOf("fund", "refund", "refundPayout", "rescue"), h.relayed.map { it.first })
             assertTrue(h.relayed.all { it.second == TICKET })
         }
 
@@ -137,7 +136,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
                 h.driver.fund(0)
                 h.funded()
                 h.driver.cancel(0)
-                assertEquals(listOf<Pair<String, String?>>("fund" to null, "lockRefund" to null), h.relayed)
+                assertEquals(listOf<Pair<String, String?>>("fund" to null, "refund" to null), h.relayed)
             }
         }
 
@@ -243,9 +242,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
                     USER,
                     REFUND,
                     TOKEN,
-                    0,
                     AMOUNT,
-                    0,
                     MAKER_SHARE,
                     USER_SHARE,
                     ByteArray(32),
@@ -335,28 +332,24 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
         }
 
     @Test
-    fun cancellationNeverRevealsWithoutConfirmedLockAndMargin() =
+    fun aCancelRefundsAnOpenEscrowNobodyMadeReadyAtOnceKeptAsPostedBeforeItGoes() =
         runTest {
             val h = Harness()
             h.prepared()
             h.driver.fund(0)
             h.funded()
-            h.driver.cancel(0)
-            assertEquals(1, h.lockCalls)
-            assertEquals(0, h.refundCalls)
-            h.refundUntil = h.now + REVEAL_MARGIN_SECONDS
-            h.driver.advance()
-            assertEquals(0, h.refundCalls)
             assertEquals(0, h.payoutSignatures, "the payout is signed only when it goes out")
-            h.refundUntil = h.now + 600
-            h.driver.advance()
+            h.driver.cancel(0)
+
             assertEquals(1, h.refundCalls)
             assertEquals(1, h.payoutSignatures)
             assertNotNull(h.record.payout)
+            assertEquals(h.now, h.keptAtRefund.single()?.refundPostedAt, "kept before the share went")
+            assertEquals(ReversePhase.REFUNDING, h.record.phase)
         }
 
     @Test
-    fun afterReadyRefundWaitsForDeadlineAndAlternatingTurn() =
+    fun aReadyEscrowIsRefundedOnlyFromT1() =
         runTest {
             val h = Harness()
             h.prepared()
@@ -364,18 +357,264 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.funded()
             h.escrow = h.swap(SwapStage.READY)
             h.driver.cancel(0)
-            assertEquals(0, h.lockCalls)
+            assertEquals(ReversePhase.REFUND_WAIT, h.record.phase)
+            h.now = REFUND - 1
+            h.driver.advance()
+            assertEquals(0, h.refundCalls, "until t1 a ready escrow is its maker's to claim")
+            assertNull(h.record.refundPostedAt)
             h.now = REFUND
-            h.claimUntil = REFUND + 500
             h.driver.advance()
-            assertEquals(0, h.lockCalls)
-            h.now = REFUND + 502
-            h.refundUntil = h.now - 1
+            assertEquals(1, h.refundCalls)
+        }
+
+    @Test
+    fun anOpenEscrowIsNeverRefundedWhileTheReadyWeSignedCanStillLand() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.driver.fund(0)
+            h.funded()
+            h.paidIn = DEPOSIT
             h.driver.advance()
-            assertEquals(0, h.lockCalls)
-            h.now += 601
+            h.driver.ready(0)
+            val deadline = checkNotNull(h.record.ready).deadline
+            assertEquals(h.now + SIGNATURE_TTL_SECONDS, deadline)
+
+            h.driver.cancel(0)
+            for (now in listOf(h.now + 1, deadline)) {
+                h.now = now
+                h.driver.advance()
+                assertEquals(0, h.refundCalls, "at $now the ready signed until $deadline may still land")
+                assertNull(h.record.refundPostedAt)
+                assertEquals(ReversePhase.REFUND_WAIT, h.record.phase)
+            }
+            h.now = deadline + 1
             h.driver.advance()
-            assertEquals(1, h.lockCalls)
+            assertEquals(1, h.refundCalls)
+            assertEquals(deadline + 1, h.record.refundPostedAt)
+        }
+
+    @Test
+    fun aReadyLandingFirstStopsTheRefundEvenAfterItsDeadlinePassedOnTheConfirmedRead() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.driver.fund(0)
+            h.funded()
+            h.paidIn = DEPOSIT
+            h.driver.advance()
+            h.driver.ready(0)
+            h.driver.cancel(0)
+            h.now = checkNotNull(h.record.ready).deadline + 1
+            // The confirmed read is behind: the newest block shows the ready landed.
+            h.latest = { h.swap(SwapStage.READY) }
+
+            h.driver.advance()
+
+            assertEquals(0, h.refundCalls)
+            assertEquals(ReversePhase.REFUND_WAIT, h.record.phase)
+        }
+
+    @Test
+    fun aRefundTheRelayerHoldsBackGoesAgainAtTheNextStep() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.driver.fund(0)
+            h.funded()
+            h.busyRefunds = 1
+
+            assertFailsWith<AtomicSwapHttpException.Refused> { h.driver.cancel(0) }
+            assertEquals(0, h.refundCalls)
+            h.driver.advance()
+            assertEquals(1, h.refundCalls)
+            assertEquals(2, h.keptAtRefund.size)
+            assertEquals(1, h.payoutSignatures, "the same request goes again")
+        }
+
+    @Test
+    fun noReadyIsSignedOrSentAgainOnceARefundWasPosted() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.driver.fund(0)
+            h.funded()
+            h.paidIn = DEPOSIT
+            // Past t0 an open escrow is due its refund, and no ready is ever taken again.
+            h.now = READY
+            h.driver.advance()
+            assertNotNull(h.record.refundPostedAt)
+
+            assertFailsWith<IllegalStateException> { h.driver.ready(0) }
+            assertEquals(0, h.readySignatures)
+            assertEquals(0, h.readyCalls)
+        }
+
+    @Test
+    fun aQuoteLeavingTheContractLessThanItsLeastWindowIsNeverTaken() =
+        runTest {
+            val quote = Harness().quote
+            for (short in listOf(
+                quote.copy(fundingDeadline = READY - WINDOWS.min + 1),
+                quote.copy(refundAfter = READY + WINDOWS.min - 1),
+            )) {
+                val h = Harness()
+                h.quote = short
+                val refused = assertFailsWith<AtomicSwapBlockedException> { h.driver.quote(AMOUNT) }
+                assertEquals(AtomicSwapBlock.MISMATCH, refused.reason)
+                assertNull(h.saved)
+            }
+        }
+
+    @Test
+    fun aConversionOnARetiredContractIsNeverQuotedPaidOrRefundedAndOneNeverPaidEnds() =
+        runTest {
+            val locks = DEPLOYMENT.copy(windows = null)
+            val live = Harness()
+            live.prepared()
+            live.driver.fund(0)
+            val unpaid = live.record.copy(deployment = locks, funding = null, phase = ReversePhase.AWAITING_FUNDING)
+            val retired = Harness(locks)
+            retired.saved = unpaid
+
+            val quoted = assertFailsWith<AtomicSwapBlockedException> { retired.driver.quote(AMOUNT) }
+            assertEquals(AtomicSwapBlock.RETIRED_CONTRACT, quoted.reason)
+            assertFailsWith<AtomicSwapBlockedException> { retired.driver.fund(0) }
+            retired.driver.advance()
+            assertEquals(ReversePhase.CANCELLED, retired.record.phase)
+            assertEquals(1, retired.forgets)
+
+            val funded = Harness(locks)
+            funded.saved = unpaid.copy(phase = ReversePhase.CONFIRMING_ESCROW, funding = live.record.funding)
+            funded.escrow = funded.swap(SwapStage.OPEN)
+            val refused = assertFailsWith<AtomicSwapBlockedException> { funded.driver.advance() }
+            assertEquals(AtomicSwapBlock.RETIRED_CONTRACT, refused.reason)
+            assertFalse(funded.driver.canRescue(0))
+            assertTrue(funded.relayed.isEmpty())
+            assertEquals(0, funded.accepts)
+        }
+
+    @Test
+    fun aRetiredConversionItsMakerClaimedComesHomeOnZcashAlone() =
+        runTest {
+            val h = Harness(LOCKS)
+            h.saved = retiredFunded(ReversePhase.SETTLING)
+            h.escrow = h.swap(SwapStage.CLAIMED)
+            h.driver.advance()
+            assertEquals(ReversePhase.RECEIVING, h.record.phase)
+            assertEquals(1, h.receiveSubmits)
+
+            h.received = ZcashTransactionStatus.Mined(DEPLOYMENT.zcashConfirmations.toLong())
+            h.driver.advance()
+            assertEquals(ReversePhase.COMPLETE, h.record.phase)
+            assertEquals(1, h.receivePrepares, "the kept sweep is the one sent")
+            assertEquals(1, h.forgets)
+            assertTrue(h.relayed.isEmpty())
+            assertEquals(0, h.accepts)
+            assertEquals(0, h.tokenCollects, "a retired contract's maker is never asked")
+        }
+
+    @Test
+    fun aRetiredEscrowStillHeldIsRefusedAndOneRefundedAndPaidOutEnds() =
+        runTest {
+            for (stage in listOf(SwapStage.OPEN, SwapStage.READY, SwapStage.REFUNDED)) {
+                val h = Harness(LOCKS)
+                h.saved = retiredFunded(ReversePhase.SETTLING)
+                h.escrow = h.swap(stage)
+                val refused = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance() }
+                assertEquals(AtomicSwapBlock.RETIRED_CONTRACT, refused.reason, "$stage")
+                assertEquals(ReversePhase.SETTLING, h.record.phase)
+                assertEquals(0, h.receivePrepares)
+                assertEquals(0, h.forgets)
+            }
+
+            val refunded = Harness(LOCKS)
+            refunded.saved = retiredFunded(ReversePhase.REFUNDING)
+            refunded.paidOut = true
+            refunded.escrow = refunded.swap(SwapStage.REFUNDED)
+            refunded.driver.advance()
+            assertEquals(ReversePhase.REFUNDED, refunded.record.phase)
+            assertEquals(1, refunded.forgets)
+            assertEquals(0, refunded.payoutCalls)
+            assertTrue(refunded.relayed.isEmpty())
+        }
+
+    @Test
+    fun aRetiredFundingThatNeverLandedEndsCalledOffAndOneThatStillMightIsRefused() =
+        runTest {
+            val pending = Harness(LOCKS)
+            pending.saved = retiredFunded(ReversePhase.SENDING_USDC)
+            val refused = assertFailsWith<AtomicSwapBlockedException> { pending.driver.advance() }
+            assertEquals(AtomicSwapBlock.RETIRED_CONTRACT, refused.reason)
+            assertEquals(ReversePhase.SENDING_USDC, pending.record.phase)
+            assertTrue(pending.submissions.isEmpty(), "its funding is never sent again")
+
+            val reverted = Harness(LOCKS)
+            reverted.saved = retiredFunded(ReversePhase.SENDING_USDC)
+            reverted.fundingState = TransactionStatus.REVERTED
+            reverted.driver.advance()
+            assertEquals(ReversePhase.CANCELLED, reverted.record.phase)
+
+            val lapsed = Harness(LOCKS)
+            lapsed.saved = retiredFunded(ReversePhase.CONFIRMING_ESCROW)
+            lapsed.now = FUNDING + FUNDING_SETTLED_AFTER_SECONDS + 1
+            lapsed.driver.advance()
+            assertEquals(ReversePhase.CANCELLED, lapsed.record.phase)
+            assertEquals(1, lapsed.forgets)
+            assertTrue(lapsed.submissions.isEmpty())
+        }
+
+    // A conversion funded on the live contract, as kept on a retired one.
+    private suspend fun retiredFunded(phase: ReversePhase): ReverseSwapRecord {
+        val live = Harness()
+        live.prepared()
+        live.driver.fund(0)
+        return live.record.copy(deployment = LOCKS, phase = phase)
+    }
+
+    @Test
+    fun aKeptReadyIsSentAgainOnlyWhileTheEscrowIsOpen() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.driver.fund(0)
+            h.funded()
+            h.paidIn = DEPOSIT
+            h.driver.advance()
+            h.driver.ready(0)
+            h.driver.advance()
+            assertEquals(2, h.readyCalls)
+
+            h.escrow = h.swap(SwapStage.READY)
+            h.driver.advance()
+            assertEquals(2, h.readyCalls, "a ready escrow needs none")
+            assertEquals(ReversePhase.SETTLING, h.record.phase)
+        }
+
+    @Test
+    fun aReadyIsNeverSignedWithLessThanItsLifeLeftBeforeT0() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.driver.fund(0)
+            h.funded()
+            h.paidIn = DEPOSIT
+            h.now = READY - SIGNATURE_TTL_SECONDS - 1
+            h.driver.advance()
+            assertEquals(ReversePhase.AWAITING_READY, h.record.phase)
+            h.driver.ready(0)
+            assertEquals(READY - 1, h.record.ready?.deadline)
+
+            val late = Harness()
+            late.prepared()
+            late.driver.fund(0)
+            late.funded()
+            late.paidIn = DEPOSIT
+            late.now = READY - SIGNATURE_TTL_SECONDS
+            late.driver.advance()
+            assertEquals(ReversePhase.REFUND_WAIT, late.record.phase, "nothing left to approve: it can only come back")
+            assertFailsWith<AtomicSwapBlockedException> { late.driver.ready(0) }
+            assertEquals(0, late.readySignatures)
         }
 
     @Test

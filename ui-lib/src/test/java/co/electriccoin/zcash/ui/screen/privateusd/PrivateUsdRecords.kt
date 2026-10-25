@@ -4,6 +4,7 @@
 package co.electriccoin.zcash.ui.screen.privateusd
 
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
+import co.electriccoin.zcash.ui.common.privateusd.Sepolia
 import io.mockk.MockKAnswerScope
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
@@ -118,7 +119,7 @@ internal fun toZec(
     acceptedAt = acceptedAt,
 )
 
-internal val TEST_USD = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")
+internal val TEST_USD = Sepolia.TEST_USD
 
 /** The amount a mocked `quote(requested)` was asked for: mocks see a value class as the value it wraps. */
 internal fun MockKAnswerScope<*, *>.requested(): Usdc6 = firstArg<Any>().let { it as? Usdc6 ?: Usdc6(it as BigInteger) }

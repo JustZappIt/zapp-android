@@ -29,6 +29,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.SwapDirection
 import xyz.justzappit.offramp.p2p.Usdc6
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 data class AtomicSwapState(
@@ -122,7 +123,6 @@ internal class AtomicSwapRepositoryImpl(
     override suspend fun quote(requested: Usdc6): AtomicSwapQuote {
         tokens.prefetch()
         reverse.requireNotUnderWay()
-        tokens.requireNotRefused()
         val offer = driverLock.withLock { sessions.forward(checkNotNull(deployment)).quote(requested) }
         return AtomicSwapQuote(offer, zcash.depositFee(offer))
     }
@@ -169,6 +169,7 @@ internal class AtomicSwapConversions(
     private val tokens: AtomicSwapTokens,
 ) : SwapConversions<AtomicSwapRecord> {
     private var wakesFor: Pair<Long, Long>? = null
+    private var lateWakeFor: Long? = null
 
     override val direction = SwapDirection.FORWARD
 
@@ -202,7 +203,7 @@ internal class AtomicSwapConversions(
             }
 
             is AtomicSwapStep.Waiting -> {
-                wake(step)
+                wake(record, step)
                 SwapLoopStep.Waiting(pollInterval(step.reason), step, confirmations(step))
             }
         }
@@ -210,6 +211,7 @@ internal class AtomicSwapConversions(
 
     override fun settled() {
         wakesFor = null
+        lateWakeFor = null
         scheduler.cancelWakes()
     }
 
@@ -245,18 +247,26 @@ internal class AtomicSwapConversions(
             }
         }
 
-    private fun wake(step: AtomicSwapStep.Waiting) {
+    private fun wake(
+        record: AtomicSwapRecord,
+        step: AtomicSwapStep.Waiting
+    ) {
         val t0 = step.t0
         val t1 = step.t1
         if (t0 != null && t1 != null && wakesFor != t0 to t1) {
             scheduler.wakeAt(t0, t1)
             wakesFor = t0 to t1
         }
+        val lateEnd = lateEnd(record, step)
+        if (lateEnd != null && lateWakeFor != lateEnd) {
+            scheduler.wakeLate(lateEnd)
+            lateWakeFor = lateEnd
+        }
     }
 
     private suspend fun confirmations(step: AtomicSwapStep.Waiting): Int? {
         val txId = store.underWay()?.deposit?.txId
-        return if (step.reason == AtomicSwapWait.CONFIRMING && txId != null) {
+        return if (step.reason in COUNTS_CONFIRMATIONS && txId != null) {
             try {
                 zcash.confirmations(txId)
             } catch (e: SdkException) {
@@ -269,17 +279,32 @@ internal class AtomicSwapConversions(
     }
 
     private companion object {
+        // A claim the relayer holds waits for the deposit's confirmations too.
+        val COUNTS_CONFIRMATIONS = setOf(AtomicSwapWait.CONFIRMING, AtomicSwapWait.CLAIM_HELD)
+
         fun pollInterval(reason: AtomicSwapWait) =
             when (reason) {
-                AtomicSwapWait.OPENING -> 5.seconds
-                AtomicSwapWait.CONFIRMING -> 20.seconds
+                AtomicSwapWait.OPENING, AtomicSwapWait.READY_DEEPENING -> 5.seconds
+                AtomicSwapWait.CONFIRMING, AtomicSwapWait.CLAIM_HELD -> 20.seconds
                 AtomicSwapWait.DEPOSIT_UNSETTLED, AtomicSwapWait.REFUNDING -> 30.seconds
+                AtomicSwapWait.UNWINDING, AtomicSwapWait.RETIRED -> 1.minutes
             }
     }
 }
 
 private suspend fun ReverseSwapRepository.requireNotUnderWay() {
     if (isUnderWay()) throw AtomicSwapBlockedException(AtomicSwapBlock.SWAP_UNDER_WAY, "a reverse swap is under way")
+}
+
+// Unwinding, the swap is its maker's to refund for its late window, and from its end the user's to claim.
+private fun lateEnd(
+    record: AtomicSwapRecord,
+    step: AtomicSwapStep.Waiting,
+): Long? {
+    val deployment = AtomicSwapSessions.knownDeploymentOf(record)
+    val late = deployment?.swap?.windows?.late
+    val t1 = step.t1
+    return if (step.reason == AtomicSwapWait.UNWINDING && t1 != null && late != null) t1 + late else null
 }
 
 private fun Flow<AtomicSwapRecord?>.unreadableAsNone(): Flow<AtomicSwapRecord?> =

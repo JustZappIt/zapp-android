@@ -29,12 +29,6 @@ const val SWAP_AMOUNT_BITS = 120
 /** The soonest `t0` a swap may have by default: ten Zcash confirmations, about 12.5 minutes, and a margin. */
 const val MIN_SECONDS_TO_T0 = 25 * 60L
 
-/** How long a signed lock or `ready` holds: under the contract's lock duration, so a signature takes one lock only. */
-const val SIGNATURE_TTL_SECONDS = 2 * 60L
-
-/** A share is revealed only under a lock with more than this left, so the reveal lands before it lapses. */
-const val REVEAL_MARGIN_SECONDS = 5 * 60L
-
 internal const val MAX_ZATOSHI = 2_100_000_000_000_000L
 
 /** Which way a swap converts: shielded ZEC into private dollars, or back. */

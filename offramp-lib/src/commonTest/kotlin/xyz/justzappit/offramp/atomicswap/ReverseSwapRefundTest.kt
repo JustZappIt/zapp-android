@@ -36,7 +36,7 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             assertFalse(checkNotNull(h.record.status as? ReverseSwapStatus.UnderWay).cancellable)
             assertFailsWith<ReverseRefundUnavailableException> { h.driver.cancel(0) }
             assertFalse(h.record.cancelRequested)
-            assertEquals(0, h.lockCalls)
+            assertEquals(0, h.refundCalls)
 
             h.interruptReceive = false
             h.driver.advance()
@@ -54,7 +54,6 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             assertFailsWith<ReverseRefundUnavailableException> { h.driver.cancel(0) }
             assertEquals(ReversePhase.RECEIVING, h.record.phase)
             assertNotNull(h.record.receive)
-            assertEquals(0, h.lockCalls)
             assertEquals(0, h.refundCalls)
         }
 
@@ -70,7 +69,7 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             assertFailsWith<ReverseRefundUnavailableException> { h.driver.cancel(0) }
             assertEquals(ReversePhase.RECEIVING, h.record.phase)
             assertNull(h.record.receive)
-            assertEquals(0, h.lockCalls)
+            assertEquals(0, h.refundCalls)
         }
 
     @Test
@@ -205,12 +204,12 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             h.prepared()
             h.driver.fund(0)
             h.funded()
-            h.driver.cancel(0)
-            h.refundUntil = h.now + 600
             h.clock = h.now + 4 * 60
+            assertFailsWith<AtomicSwapBlockedException> { h.driver.cancel(0) }
             val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance() }
             assertEquals(AtomicSwapBlock.CHAIN_LAGGING, blocked.reason)
             assertEquals(0, h.refundCalls)
+            assertNull(h.record.refundPostedAt)
             h.clock = h.now + 90
             h.driver.advance()
             assertEquals(1, h.refundCalls)
@@ -255,8 +254,7 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             h.escrow = h.swap(SwapStage.READY)
             h.now = REFUND
             h.driver.advance()
-            assertEquals(1, h.lockCalls)
-            assertEquals(0, h.refundCalls)
+            assertEquals(1, h.refundCalls)
             assertEquals(0, h.readySignatures)
         }
 

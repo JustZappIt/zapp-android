@@ -18,10 +18,12 @@ import kotlinx.coroutines.launch
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalances
 import xyz.justzappit.railgun.RailgunBroadcaster
+import xyz.justzappit.railgun.RailgunDepositNote
 import xyz.justzappit.railgun.RailgunEvent
 import xyz.justzappit.railgun.RailgunFees
 import xyz.justzappit.railgun.RailgunMerkletree
 import xyz.justzappit.railgun.RailgunNetwork
+import xyz.justzappit.railgun.RailgunReceivedSend
 import xyz.justzappit.railgun.RailgunRelayedProof
 import xyz.justzappit.railgun.RailgunReverseCost
 import xyz.justzappit.railgun.RailgunReverseCostRequest
@@ -61,15 +63,25 @@ interface RailgunWalletRepository {
 
     suspend fun prepareReverse(request: RailgunReverseRequest): RailgunReverseTransaction
 
+    /**
+     * A new note for a deposit to shield into this wallet ([RailgunDepositNote]), checked to pay the wallet the Zapp
+     * seed's Railgun mnemonic makes. It starts the engine and opens the wallet if need be, never syncs, and doesn't
+     * wait for a sync under way: a wallet's first takes up to an hour and a half on a phone. A note can't be made
+     * again, so keep it whole before a deposit that pays it goes out.
+     */
+    suspend fun depositNote(): RailgunDepositNote
+
     /** Stops the engine and deletes what it stored, for a wallet about to be wiped. */
     suspend fun reset()
 }
 
-/** Balances as a sync of the wallet at [address] found them. */
+/** Balances as a sync of the wallet at [address] found them, with the private sends it received. */
 data class RailgunSync(
     val address: RailgunAddress,
     val balances: RailgunBalances,
     val at: Instant,
+    /** Null when the sync couldn't read the wallet's history. */
+    val received: List<RailgunReceivedSend>? = null,
 )
 
 data class RailgunWalletState(
@@ -89,7 +101,7 @@ data class RailgunWalletState(
 class RailgunWalletRepositoryImpl(
     railgunWallet: RailgunWallet,
     keyProvider: RailgunKeyProvider,
-    mnemonicProvider: RailgunMnemonicProvider,
+    private val mnemonicProvider: RailgunMnemonicProvider,
     deployments: AtomicSwapDeployments,
     scope: CoroutineScope,
 ) : RailgunWalletRepository {
@@ -145,13 +157,25 @@ class RailgunWalletRepositoryImpl(
             it.prepareReverse(request)
         }
 
+    override suspend fun depositNote(): RailgunDepositNote {
+        val note = withSession(alongside = true) { it.depositNote() }
+        // A note made alongside a use of the wallet before a change of wallets would pay that wallet.
+        check(note.receiver == mnemonicProvider.address()) { "the deposit note pays another wallet than the seed's" }
+        return note
+    }
+
     override suspend fun reset() {
         engine?.reset()
     }
 
-    private suspend fun <T> withSession(block: suspend (RailgunSession) -> T): T {
+    private suspend fun <T> withSession(
+        alongside: Boolean = false,
+        block: suspend (RailgunSession) -> T,
+    ): T {
         val engine = checkNotNull(engine) { "this build has no Railgun network" }
-        return mutableState.reported { engine.withSession(block) }
+        return mutableState.reported {
+            if (alongside) engine.withSessionAlongside(block) else engine.withSession(block)
+        }
     }
 
     private suspend fun proving(prove: suspend (RailgunSession) -> RailgunRelayedProof) =
@@ -164,7 +188,8 @@ class RailgunWalletRepositoryImpl(
 private suspend fun MutableStateFlow<RailgunWalletState>.syncWith(session: RailgunSession): RailgunSync {
     // The scan lines describe this sync only, not whatever scan finished last.
     update { it.copy(phase = RailgunWalletState.Phase.SYNCING, utxoScan = null, txidScan = null) }
-    val sync = RailgunSync(session.address, session.refresh(), Clock.System.now())
+    val refreshed = session.refresh()
+    val sync = RailgunSync(session.address, refreshed.balances, Clock.System.now(), refreshed.received)
     update { it.copy(phase = RailgunWalletState.Phase.READY, sync = sync) }
     return sync
 }

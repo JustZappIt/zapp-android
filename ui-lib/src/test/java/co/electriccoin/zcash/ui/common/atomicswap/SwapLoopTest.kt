@@ -93,15 +93,28 @@ class SwapLoopTest {
         }
 
     @Test
-    fun `a claim lock lapsing into the maker's turn is waited out without asking the user, who can't help`() =
+    fun `a claim window shutting while the claim was prepared is waited out without asking the user, who can't help`() =
         runTest {
-            val lapsing = AtomicSwapBlockedException(AtomicSwapBlock.CLAIM_LOCK_LAPSING, "the maker has the turn")
-            val loop = loop(Scripted(*Array(60) { fail(lapsing) }))
+            val shut = AtomicSwapBlockedException(AtomicSwapBlock.CLAIM_WINDOW_SHUT, "the window shut meanwhile")
+            val loop = loop(Scripted(*Array(60) { fail(shut) }))
 
             loop.start(resuming = false)
             advanceTimeBy(10.minutes)
 
-            assertEquals(AtomicSwapProblem.CLAIM_TURN, loop.progress.value.problem)
+            assertEquals(AtomicSwapProblem.CLAIM_WINDOW, loop.progress.value.problem)
+            verify(exactly = 0) { notifier.heldUp(any()) }
+        }
+
+    @Test
+    fun `a conversion on a retired contract says so, and never asks to open the app, which can't help`() =
+        runTest {
+            val retired = AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "a lock contract's escrow")
+            val loop = loop(Scripted(*Array(60) { fail(retired) }))
+
+            loop.start(resuming = false)
+            advanceTimeBy(10.minutes)
+
+            assertEquals(AtomicSwapProblem.RETIRED, loop.progress.value.problem)
             verify(exactly = 0) { notifier.heldUp(any()) }
         }
 
@@ -239,6 +252,45 @@ class SwapLoopTest {
                 )
             }
             verify { scheduler.cancelWakes() }
+        }
+
+    @Test
+    fun `a forward swap unwinding wakes the app once its maker's late window is over`() =
+        runTest {
+            val scheduler = mockk<AtomicSwapScheduler>(relaxed = true)
+            val driver = mockk<AtomicSwapDriver>()
+            val unwinding = AtomicSwapStep.Waiting(AtomicSwapWait.UNWINDING, t0 = 1_000, t1 = 2_000)
+            val testnet = AtomicSwapTestnet.deployment.swap
+            val kept = toUsd(index = 4, at = 10, outcome = null)
+            val quote = kept.quote.copy(chainId = testnet.chainId, contract = testnet.contract, token = testnet.token)
+            val record = kept.copy(quote = quote)
+            coEvery { driver.advance(any(), any()) } returns unwinding
+            val sessions =
+                mockk<AtomicSwapSessions> {
+                    every { session } returns 0L
+                    every { forward(any<AtomicSwapRecord>(), any()) } returns driver
+                }
+            val conversions =
+                AtomicSwapConversions(
+                    sessions,
+                    Mutex(),
+                    ForwardRecords(record),
+                    mockk(relaxed = true),
+                    scheduler,
+                    notifier,
+                    mockk(relaxed = true),
+                    mockk(relaxed = true),
+                )
+            val loop = loop(conversions)
+
+            loop.start(resuming = false)
+            runCurrent()
+            repeat(2) {
+                loop.nudge()
+                runCurrent()
+            }
+
+            verify(exactly = 1) { scheduler.wakeLate(2_000 + checkNotNull(testnet.windows).late) }
         }
 
     @Test

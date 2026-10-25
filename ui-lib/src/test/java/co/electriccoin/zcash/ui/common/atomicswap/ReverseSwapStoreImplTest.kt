@@ -81,7 +81,7 @@ class ReverseSwapStoreImplTest {
         }
 
     @Test
-    fun `a mainnet conversion under way keeps the mainnet beta and is written back unchanged`() =
+    fun `a conversion the mainnet beta kept reads as on its retired contract and is written back unchanged`() =
         runTest {
             val preferences = InMemoryPreferenceProvider()
             preferences.putString(PreferenceKey(KEY), MAINNET_KEPT)
@@ -90,7 +90,7 @@ class ReverseSwapStoreImplTest {
             val record = checkNotNull(store.underWay())
             store.save(record)
 
-            assertEquals(AtomicSwapMainnet.deployment.swap, record.deployment)
+            assertEquals(AtomicSwapMainnet.retired.swap, record.deployment)
             assertEquals(ChainId.ETHEREUM_MAINNET, record.quote.terms.chainId)
             assertEquals(MAINNET_KEPT, preferences.getString(PreferenceKey(KEY)))
         }
@@ -127,7 +127,7 @@ class ReverseSwapStoreImplTest {
         val KEPT = """{"active":$RECORD,"history":[$RECORD]}"""
 
         private val storeJson = Json { explicitNulls = false }
-        private val MAINNET = storeJson.encodeToString(SwapDeployment.serializer(), AtomicSwapMainnet.deployment.swap)
+        private val MAINNET = storeJson.encodeToString(SwapDeployment.serializer(), AtomicSwapMainnet.retired.swap)
         private val MAINNET_RECORD =
             RECORD
                 .replace(TESTNET, MAINNET)
@@ -136,7 +136,7 @@ class ReverseSwapStoreImplTest {
                 .replace("0x5764d0044bef5aa839e0ddafe2073421101b9ed8", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
                 .replace("0x2bac02b5032e9092493814c705f156b49e288922", "0x4370eeaa6becf1daef21deeb0379eb7f6caef7ef")
 
-        /** The same conversion, kept by a mainnet build. */
+        /** The same conversion, kept by a mainnet build on the lock contract. */
         val MAINNET_KEPT = """{"active":$MAINNET_RECORD,"history":[$MAINNET_RECORD]}"""
     }
 }

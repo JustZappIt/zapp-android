@@ -135,7 +135,7 @@ private fun UnderWayPreview() =
                                 detailLines = listOf(stringRes("2 of 3 · about 2 min")),
                             ),
                             ZappStep(stringRes("Claiming your dollars"), ZappStepStatus.Pending),
-                            ZappStep(stringRes("Arriving in your private balance"), ZappStepStatus.Pending),
+                            ZappStep(stringRes("Arriving in your shielded balance"), ZappStepStatus.Pending),
                             ZappStep(stringRes("Screening"), ZappStepStatus.Pending),
                         ),
                     note = null,

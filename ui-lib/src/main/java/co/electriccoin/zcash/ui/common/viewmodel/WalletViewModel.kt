@@ -57,6 +57,9 @@ class WalletViewModel(
      * a wallet with only dust-level residual Orchard balance (e.g. a previously locked residue)
      * used to re-trigger this full-screen announcement on every re-import — a bare `> 0L` check
      * doesn't distinguish that from a genuinely unmigrated balance worth announcing.
+     *
+     * The balance is the one from the wallet's last sync ([SynchronizerProvider.syncedWalletBalances]):
+     * while a sync scans an account a conversion just imported, the SDK reports Ironwood funds as Orchard.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val shouldShowIronwoodAnnouncement: StateFlow<Boolean> =
@@ -67,7 +70,7 @@ class WalletViewModel(
                 } else {
                     combine(
                         synchronizer.fullyScannedHeight,
-                        synchronizerProvider.walletBalances,
+                        synchronizerProvider.syncedWalletBalances,
                         walletRepository.isIronwoodAnnouncementShown,
                     ) { scannedHeight, balances, isShown ->
                         val activationHeight = IronwoodActivation.heightFor(synchronizer.network)

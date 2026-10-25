@@ -128,17 +128,28 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
-    fun aRefundLockedAfterT0IsASwapNobodyClaimedInTime() =
+    fun aRefundSeenFromT1IsToldByTheTimeOfItsBlock() =
         runTest {
-            val h = Harness()
-            val record = h.minedDeposit()
-            h.chain.stage = SwapStage.REFUNDED
-            h.chain.refundLockUntil = h.chain.t0 + 300 + 10 + LOCK_SECONDS
-            h.driver.advance(record)
-            h.zcash.status[txId("sweep1")] = ZcashTransactionStatus.Mined(3)
+            val t0 = NOW + 35 * 60
+            val cases =
+                listOf(
+                    // The maker cancels only before t0, and refunds an unclaimed swap only from t1.
+                    t0 - 60 to RefundCause.MAKER_CANCELLED,
+                    t0 + T0_TO_T1 to RefundCause.NOT_CLAIMED_IN_TIME,
+                    null to RefundCause.NOT_CLAIMED_IN_TIME,
+                )
+            for ((refundedAt, cause) in cases) {
+                val h = Harness()
+                val record = h.minedDeposit()
+                h.chain.stage = SwapStage.REFUNDED
+                h.chain.refundedAt = refundedAt
+                h.chain.now = h.chain.t1 + 60
+                h.driver.advance(record)
+                h.zcash.status[txId("sweep1")] = ZcashTransactionStatus.Mined(3)
 
-            val refunded = AtomicSwapOutcome.Refunded(txId("sweep1"), RefundCause.NOT_CLAIMED_IN_TIME)
-            assertEquals(AtomicSwapStep.Finished(refunded), h.driver.advance(h.store.record!!))
+                val refunded = AtomicSwapOutcome.Refunded(txId("sweep1"), cause)
+                assertEquals(AtomicSwapStep.Finished(refunded), h.driver.advance(h.store.record!!), "$refundedAt")
+            }
         }
 
     @Test
@@ -184,16 +195,87 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
-    fun theShareStaysSecretUnderALockAboutToLapse() =
+    fun theShareStaysSecretWithUnderTheMarginLeftBeforeT1WhileTheSwapUnwinds() =
         runTest {
             val h = Harness()
             val record = h.depositedRecord()
             h.chain.stage = SwapStage.READY
-            h.chain.claimLockUntil = NOW + 60
+            h.at(h.chain.t1 - CLAIM_MARGIN_SECONDS)
+
+            assertEquals(waiting(AtomicSwapWait.UNWINDING), h.driver.advance(record))
+            // From t1 the swap is the maker's to refund for its late window...
+            h.at(h.chain.t1 + LATE_WINDOW - 1)
+            assertEquals(waiting(AtomicSwapWait.UNWINDING), h.driver.advance(record))
+            assertTrue("/v1/claim" !in h.paths)
+            assertEquals(listOf(Usdc6.ofMicros(20_000)), h.keys.signedFees, "nothing but the hand-over's payout")
+
+            // ...and after it, the claim is the user's for good.
+            h.at(h.chain.t1 + LATE_WINDOW)
+            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
+            assertTrue("/v1/claim" in h.paths)
+        }
+
+    @Test
+    fun theClaimsWindowEndsByTheLaterOfTheChainsClockAndTheDevicesOnly() =
+        runTest {
+            val h = Harness()
+            val record = h.depositedRecord()
+            h.chain.stage = SwapStage.READY
+            h.chain.now = h.chain.t1 - CLAIM_MARGIN_SECONDS - 100
+            // By the chain's clock alone it would go; by this device's, 150 seconds on, it would land late.
+            h.clock = h.chain.now + 150
+
+            assertEquals(waiting(AtomicSwapWait.UNWINDING), h.driver.advance(record))
+            assertTrue("/v1/claim" !in h.paths)
+        }
+
+    @Test
+    fun beforeT0AClaimGoesOnlyOnAReadyTwoBlocksDeep() =
+        runTest {
+            val h = Harness()
+            val record = h.depositedRecord()
+            h.chain.stage = SwapStage.READY
+            h.chain.readyBlock = HEAD - READY_DEPTH + 1
+
+            assertEquals(waiting(AtomicSwapWait.READY_DEEPENING), h.driver.advance(record))
+            assertEquals(listOf(HEAD - READY_DEPTH), h.chain.readAt, "read as of the block two below the newest")
+            assertTrue("/v1/claim" !in h.paths)
+
+            h.chain.readyBlock = HEAD - READY_DEPTH
+            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
+            assertTrue("/v1/claim" in h.paths)
+        }
+
+    @Test
+    fun theWindowIsJudgedAgainOnAFreshReadRightBeforeTheShareGoes() =
+        runTest {
+            val h = Harness()
+            val record = h.depositedRecord()
+            h.chain.stage = SwapStage.READY
+            // Deriving the share takes until there's less than the margin left before t1.
+            h.keys.beforeClaimSecret = { h.at(h.chain.t1 - CLAIM_MARGIN_SECONDS) }
 
             val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
-            assertEquals(AtomicSwapBlock.CLAIM_LOCK_LAPSING, blocked.reason)
+            assertEquals(AtomicSwapBlock.CLAIM_WINDOW_SHUT, blocked.reason)
             assertTrue("/v1/claim" !in h.paths)
+            assertNull(h.store.record?.claimPostedAt)
+            assertEquals(3, h.chain.reads, "the deposit's read, the claim's, and a fresh one before the share")
+        }
+
+    @Test
+    fun theClaimIsKeptAsPostedBeforeTheShareGoesAndAPostAgainKeepsWhenItFirstWent() =
+        runTest {
+            val h = Harness()
+            h.feeExpiresAt = NOW + FEE_VALIDITY
+            val record = h.depositedRecord()
+            h.relayerFee = "30000"
+            h.leastFee = 30_000
+            h.chain.stage = SwapStage.READY
+            h.clock = NOW + 30
+
+            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
+            assertEquals(listOf<Long?>(NOW + 30, NOW + 30), h.keptAtClaim.map { it?.claimPostedAt })
+            assertEquals(NOW + 30, h.store.record?.claimPostedAt)
         }
 
     @Test
@@ -202,12 +284,11 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
             val h = Harness()
             val record = h.depositedRecord()
             h.chain.stage = SwapStage.READY
-            h.chain.claimLockUntil = NOW + LOCK_SECONDS
             h.clock = NOW + 4 * 60
 
             val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
             assertEquals(AtomicSwapBlock.CHAIN_LAGGING, blocked.reason)
-            assertTrue(h.paths.none { it == "/v1/claim" || it == "/v1/lock-claim" })
+            assertTrue("/v1/claim" !in h.paths)
         }
 
     @Test
@@ -247,7 +328,8 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
             h.chain.now = h.clock
 
             assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
-            assertEquals(listOf(Usdc6.ofMicros(30_000)), h.keys.signedFees)
+            // The hand-over, within the hour, signed the offer's fee.
+            assertEquals(listOf(Usdc6.ofMicros(20_000), Usdc6.ofMicros(30_000)), h.keys.signedFees)
             assertEquals(payoutAfterFees(AMOUNT, Usdc6.ofMicros(30_000)), h.store.record?.receives)
         }
 
@@ -291,7 +373,7 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
 
             val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
             assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, blocked.reason)
-            assertTrue("/v1/lock-claim" !in h.paths)
+            assertTrue("/v1/claim" !in h.paths)
         }
 
     @Test
@@ -300,7 +382,7 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
             val h = Harness()
             val record = h.depositedRecord()
             h.chain.stage = SwapStage.READY
-            h.unreachable = "/v1/lock-claim"
+            h.unreachable = "/v1/claim"
 
             val failed = assertFailsWith<AtomicSwapHttpException.Unreachable> { h.driver.advance(record) }
             assertEquals(AtomicSwapService.RELAYER, failed.service)
@@ -414,30 +496,12 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
 
             val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
             assertEquals(AtomicSwapBlock.MISMATCH, blocked.reason)
-            assertTrue(h.paths.none { it == "/v1/lock-claim" || it == "/v1/claim" })
+            assertTrue("/v1/claim" !in h.paths)
             assertNull(h.store.record?.outcome)
 
             h.chain.stage = SwapStage.CLAIMED
             assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
             assertTrue("/v1/payout" !in h.paths)
-        }
-
-    @Test
-    fun theMakersTurnAfterOurClaimLockLapsedIsWaitedOutWithoutAskingTheRelayer() =
-        runTest {
-            val h = Harness()
-            val record = h.depositedRecord()
-            h.chain.stage = SwapStage.READY
-            h.chain.claimLockUntil = NOW - 10
-
-            val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
-            assertEquals(AtomicSwapBlock.CLAIM_LOCK_LAPSING, blocked.reason)
-            assertTrue("/v1/lock-claim" !in h.paths)
-
-            h.chain.now = NOW - 10 + LOCK_SECONDS
-            h.clock = h.chain.now
-            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
-            assertTrue("/v1/lock-claim" in h.paths)
         }
 
     @Test
@@ -451,7 +515,7 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
             val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
             assertEquals(AtomicSwapBlock.RELAYER_FEE, blocked.reason)
             assertTrue("/v1/payout" !in h.paths)
-            assertTrue(h.keys.signedFees.isEmpty())
+            assertEquals(listOf(Usdc6.ofMicros(20_000)), h.keys.signedFees, "nothing but the hand-over's payout")
             assertNull(h.store.record?.outcome)
         }
 

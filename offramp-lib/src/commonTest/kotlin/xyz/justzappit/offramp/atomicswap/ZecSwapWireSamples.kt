@@ -6,9 +6,29 @@ package xyz.justzappit.offramp.atomicswap
 /**
  * zecswap-api's serde JSON of each relayer request that carries terms, for [ZecSwapVectors.PAYS_RAILGUN] under swap id
  * 32 bytes of 0x01, signature 65 bytes of 0x01, every other word 32 bytes of 0x02, fee 20000, deadline 100 (a rescue's
- * nonce 0 and deadline 1000). `lockClaim` and `ready` send [AUTHORIZATION], `claim` and `refund` [REVEAL].
+ * nonce 0 and deadline 1000). `ready` sends [AUTHORIZATION], `claim` and `refund` [REVEAL]. The answers below are the
+ * hosted testnet's on the windows contract, as read through its gateway on 2026-10-23.
  */
 object ZecSwapWireSamples {
+    /** The maker's `GET /v1/info`. */
+    const val MAKER_INFO =
+        "{\"apiVersion\":1,\"maker\":\"0x2bac02b5032e9092493814c705f156b49e288922\",\"chainId\":11155111,\"c" +
+            "ontract\":\"0x459b0a69e0f736666b66a3ffe0fc17c11f05980d\",\"contractKind\":\"windows\",\"minWindow\"" +
+            ":1800,\"lateWindow\":3600,\"token\":\"0x64c4a5cb09fe0b706d4cf24dc0a45fff275d727c\",\"zcashNetwork\"" +
+            ":\"testnet\",\"reverseEnabled\":true,\"tokenReturnKey\":null}"
+
+    /** The relayer's `GET /v1/terms`, less the reverse funding, private sends and deposits it offers. */
+    const val RELAYER_TERMS =
+        "{\"relayer\":\"0xd9633572041886fa7584a2e12f36c8c7f1126412\",\"chainId\":11155111,\"contract\":\"0x459" +
+            "b0a69e0f736666b66a3ffe0fc17c11f05980d\",\"contractKind\":\"windows\",\"minWindow\":1800,\"lateWindow" +
+            "\":3600,\"fee\":\"100000\",\"feeExpiresAt\":1792799328}"
+
+    /** A forward accept's answer, with the late window the maker's contract has. */
+    const val ACCEPTED =
+        "{\"swapId\":\"0x0101010101010101010101010101010101010101010101010101010101010101\",\"t0\":1790003600," +
+            "\"t1\":1790007200,\"lateWindow\":3600,\"ticket\":\"0x01010101010101010101010101010101010101010101010" +
+            "10101010101010101.3f3f\"}"
+
     const val AUTHORIZATION =
         "{\"swapId\":\"0x0101010101010101010101010101010101010101010101010101010101010101\",\"terms\":{\"" +
             "maker\":\"0x09ed1f966745be18c711c346242c0974dad7c3e5\",\"token\":\"0x333333333333333333333333333" +

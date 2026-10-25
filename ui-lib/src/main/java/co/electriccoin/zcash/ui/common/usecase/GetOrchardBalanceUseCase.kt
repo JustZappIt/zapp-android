@@ -35,6 +35,11 @@ class GetOrchardBalanceUseCase(
         return balances[account.sdkAccount.accountUuid]?.orchard?.available ?: Zatoshi.ZERO
     }
 
+    /**
+     * The balance as of the wallet's last sync ([SynchronizerProvider.syncedWalletBalances]), for the
+     * home banner: while a sync scans an account a conversion just imported, the SDK reports Ironwood
+     * funds as Orchard.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observe(): Flow<Zatoshi?> =
         combine(
@@ -46,7 +51,7 @@ class GetOrchardBalanceUseCase(
             if (synchronizer == null || account == null) {
                 flowOf(null)
             } else {
-                synchronizerProvider.walletBalances.map { balances ->
+                synchronizerProvider.syncedWalletBalances.map { balances ->
                     balances?.get(account.sdkAccount.accountUuid)?.orchard?.available
                 }
             }

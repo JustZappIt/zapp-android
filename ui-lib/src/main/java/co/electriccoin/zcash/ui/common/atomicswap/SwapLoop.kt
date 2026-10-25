@@ -68,7 +68,9 @@ enum class AtomicSwapProblem : SwapHold {
     RELAYER_FEE,
     ETHEREUM_UNREACHABLE,
     RAILGUN_CLOSED,
-    CLAIM_TURN,
+
+    /** The claim's window shut while the claim was prepared: nothing was revealed, and the next step looks again. */
+    CLAIM_WINDOW,
     ZCASH_WALLET,
 
     /** The wallet can't pay the deposit within what the user approved; past its window, nothing is sent. */
@@ -82,6 +84,9 @@ enum class AtomicSwapProblem : SwapHold {
 
     /** No token for the maker's accept can be fetched over Tor now. */
     TOKENS_UNREACHABLE,
+
+    /** On a lock contract this build no longer drives, with an escrow paid into it: support gets it back. */
+    RETIRED,
     UNEXPECTED,
 }
 
@@ -247,8 +252,8 @@ internal class SwapLoop<R : Any>(
     private inner class Attention(
         private var asked: Ask?,
     ) {
-        // Waiting for the maker's turn to pass, for Railgun to reopen, or for the relayer's fee to come down: opening
-        // the app changes none of them.
+        // Waiting for the claim's window, for Railgun to reopen, or for the relayer's fee to come down: opening the app
+        // changes none of them.
         fun failed() {
             val current = progress.value
             val failingFor = nowSeconds() - (current.failingSince ?: nowSeconds())
@@ -335,7 +340,8 @@ internal class SwapLoop<R : Any>(
         val NEEDS_YOU_AFTER = 5.minutes
         val OUT_OF_THE_USERS_HANDS =
             setOf(
-                AtomicSwapProblem.CLAIM_TURN,
+                AtomicSwapProblem.CLAIM_WINDOW,
+                AtomicSwapProblem.RETIRED,
                 AtomicSwapProblem.RAILGUN_CLOSED,
                 AtomicSwapProblem.RELAYER_FEE,
                 AtomicSwapProblem.ZCASH_REJECTED,
@@ -427,8 +433,12 @@ internal fun AtomicSwapBlock.hold(): SwapHold =
             AtomicSwapProblem.RAILGUN_CLOSED
         }
 
-        AtomicSwapBlock.CLAIM_LOCK_LAPSING -> {
-            AtomicSwapProblem.CLAIM_TURN
+        AtomicSwapBlock.CLAIM_WINDOW_SHUT -> {
+            AtomicSwapProblem.CLAIM_WINDOW
+        }
+
+        AtomicSwapBlock.RETIRED_CONTRACT -> {
+            AtomicSwapProblem.RETIRED
         }
 
         AtomicSwapBlock.CHAIN_LAGGING, AtomicSwapBlock.CHAIN_UNREADABLE -> {

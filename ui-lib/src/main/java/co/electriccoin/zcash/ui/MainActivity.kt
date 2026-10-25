@@ -40,6 +40,7 @@ import co.electriccoin.zcash.ui.common.compose.BindCompLocalProvider
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.common.extension.setContentCompat
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.provider.CHAT_CONVERSATION_ID_EXTRA
 import co.electriccoin.zcash.ui.common.push.ChatNotificationTiming
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationUIState
@@ -112,6 +113,7 @@ class MainActivity : FragmentActivity() {
     private val atomicSwapDeployments: AtomicSwapDeployments by inject()
     private val reverseSwapRepository: ReverseSwapRepository by inject()
     private val atomicSwapRepository: AtomicSwapRepository by inject()
+    private val privateUsdDeposits: PrivateUsdDepositsRepository by inject()
 
     private val groupInvites: GroupInviteCoordinator by inject()
 
@@ -126,6 +128,8 @@ class MainActivity : FragmentActivity() {
         setupUiContent()
 
         monitorForBackgroundSync()
+
+        watchDepositsWhileUnlocked()
 
         forwardUriIntent(intent, resumeReclaim = true)
         forwardChatNotificationIntent(intent)
@@ -481,6 +485,24 @@ class MainActivity : FragmentActivity() {
 
         if (isScreenTimeoutDisabled == true) {
             DisableScreenTimeout()
+        }
+    }
+
+    // Shielded USD's deposit addresses are looked at only while Zapp is open and its lock is passed: a deposit under
+    // way waits meanwhile, safe at its address.
+    private fun watchDepositsWhileUnlocked() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                try {
+                    authenticationViewModel.appAccessAuthenticationResultState.collect { state ->
+                        privateUsdDeposits.onAppUnlocked(
+                            state == AuthenticationUIState.NotRequired || state == AuthenticationUIState.Successful
+                        )
+                    }
+                } finally {
+                    privateUsdDeposits.onAppUnlocked(false)
+                }
+            }
         }
     }
 

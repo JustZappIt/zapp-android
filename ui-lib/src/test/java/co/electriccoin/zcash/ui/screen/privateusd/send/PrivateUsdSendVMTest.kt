@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendCost
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendOutcome
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSender
@@ -20,6 +21,7 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.common.privateusd.Sepolia
+import co.electriccoin.zcash.ui.common.privateusd.basisPoints
 import co.electriccoin.zcash.ui.common.privateusd.exactTokenAmount
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletState
@@ -46,7 +48,9 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.offramp.atomicswap.RAILGUN_FEE
 import xyz.justzappit.railgun.RailgunException
 import xyz.justzappit.railgun.RailgunNetwork
 import java.math.BigDecimal
@@ -69,6 +73,8 @@ class PrivateUsdSendVMTest {
             every { pinPrompt } returns pin
             coEvery { authenticate(any(), any()) } returns true
         }
+    private val deposits =
+        mockk<PrivateUsdDepositsRepository> { coEvery { ownAddresses() } returns setOf(Address.parse(OWN_DEPOSIT)) }
     private lateinit var vm: PrivateUsdSendVM
 
     @Before
@@ -102,7 +108,8 @@ class PrivateUsdSendVMTest {
                 mockk(relaxed = true),
                 mockk<PrivateUsdSpendGuard> {
                     every { state } returns spending
-                }
+                },
+                deposits,
             )
     }
 
@@ -376,6 +383,31 @@ class PrivateUsdSendVMTest {
             assertEquals(PrivateUsdSendPhase.REVIEW, vm.state.value.phase)
         }
 
+    @Test
+    fun `a withdrawal to one of the wallet's own deposit addresses is refused, and says why`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            vm.state.value.amount
+                .onValueChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
+            vm.state.value.recipient
+                .onValueChange(OWN_DEPOSIT)
+
+            assertEquals(
+                stringRes(R.string.private_usd_send_own_deposit_address, basisPoints(RAILGUN_FEE)),
+                vm.state.value.recipient.error,
+            )
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+            vm.state.value.primaryButton
+                .onClick()
+            assertEquals(PrivateUsdSendPhase.FORM, vm.state.value.phase)
+            coVerify(exactly = 0) { sender.cost(any()) }
+
+            vm.state.value.recipient
+                .onValueChange(RECIPIENT)
+            assertNull(vm.state.value.recipient.error)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
+        }
+
     private fun review() {
         vm.state.value.amount
             .onValueChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
@@ -394,6 +426,9 @@ class PrivateUsdSendVMTest {
     private companion object {
         val AVAILABLE: BigInteger = BigInteger.TEN.pow(6)
         const val RECIPIENT = "0x09ed1f966745be18c711c346242c0974dad7c3e5"
+
+        // One of the wallet's deposit addresses, as an exchange's withdrawal form would have it: checksummed.
+        const val OWN_DEPOSIT = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"
         val TX_HASH = TxHash.fromHex("0x" + "12".repeat(32))
     }
 }

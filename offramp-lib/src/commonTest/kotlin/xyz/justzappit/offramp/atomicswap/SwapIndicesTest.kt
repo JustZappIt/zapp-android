@@ -57,19 +57,33 @@ class SwapIndicesTest {
             terms: SwapTerms
         ): OnChainSwap? = error("indices must include unconfirmed swaps")
 
+        override suspend fun swapNow(
+            id: SwapId,
+            terms: SwapTerms
+        ): SwapRead = error("indices judge no reveal")
+
+        override suspend fun swapAt(
+            id: SwapId,
+            terms: SwapTerms,
+            block: Long,
+        ): OnChainSwap? = error("indices judge no reveal")
+
+        override suspend fun refundedAt(
+            id: SwapId,
+            since: Long
+        ): Long? = null
+
         override suspend fun confirmedPayout(
             id: SwapId,
             since: Long
         ): SwapPayoutEvidence? = null
 
         override suspend fun swap(id: SwapId): SwapState? =
-            SwapState(ByteArray(32), SwapStage.CLAIMED, true, 0, 0, ByteArray(32)).takeIf { id in forwardIds }
+            SwapState(ByteArray(32), SwapStage.CLAIMED, true, ByteArray(32)).takeIf { id in forwardIds }
 
         override suspend fun now() = 0L
 
         override suspend fun railgunAccepts(token: Address) = true
-
-        override suspend fun lockDuration() = 600L
 
         override suspend fun makerKeyUsed(
             owner: Address,
@@ -104,14 +118,6 @@ class SwapIndicesTest {
         ) = error("not needed")
 
         override suspend fun claimSecret(index: Int) = error("not needed")
-
-        override suspend fun signLockClaim(
-            index: Int,
-            chainId: ChainId,
-            contract: Address,
-            swapId: SwapId,
-            deadline: Long,
-        ) = error("not needed")
 
         override suspend fun signPayout(
             index: Int,

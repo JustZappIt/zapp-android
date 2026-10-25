@@ -8,6 +8,7 @@ package xyz.justzappit.offramp.atomicswap
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
+import kotlinx.serialization.json.JsonElement
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.TxHash
@@ -40,7 +41,7 @@ data class SwapAcceptance(
     val tokenRequest: String? = null,
 )
 
-/** A lock or `ready` the swap's own key signed, for a relayer to send. */
+/** A `ready` the swap's own key signed, for a relayer to send. */
 @Serializable
 data class SwapAuthorization(
     val swapId: SwapId,
@@ -76,7 +77,7 @@ data class SwapRescue(
     val signature: String,
 )
 
-/** A share revealed under a held lock, with the payout that follows it. */
+/** A share revealed in its window, with the payout that follows it. */
 @Serializable
 data class SwapReveal(
     val swapId: SwapId,
@@ -96,6 +97,15 @@ data class RelayerTerms(
     val railgunSends: RailgunSendsTerms? = null,
     /** Unix seconds until which the relayer takes [fee] and the funding fee as quoted; none where it prices no gas. */
     val feeExpiresAt: Long? = null,
+    /** The contract's kind, `windows`, and its windows in seconds, as the contract reports them; none on a lock one. */
+    val contractKind: String? = null,
+    val minWindow: Long? = null,
+    val lateWindow: Long? = null,
+    /**
+     * Present when the relayer shields public tokens sent to wallets' deposit addresses, as it sent them: terms that
+     * don't read take no deposits, and leave the rest of these readable (`xyz.justzappit.offramp.deposits`).
+     */
+    val deposits: JsonElement? = null,
 )
 
 /** How the relayer sends a wallet's Railgun transaction: it pays the gas for a fee note to [railgunAddress]. */
@@ -150,6 +160,10 @@ data class MakerInfo(
     val reverseEnabled: Boolean,
     /** The key accepts' tokens come back under, base64url SPKI; none where accepts take no tokens. */
     val tokenReturnKey: String? = null,
+    /** The contract's kind, `windows`, and its windows in seconds, as the contract reports them; none on a lock one. */
+    val contractKind: String? = null,
+    val minWindow: Long? = null,
+    val lateWindow: Long? = null,
 )
 
 /** A maker's status of a swap either way, as far as the app reads it: its accept's token, once handed back. */
@@ -162,6 +176,13 @@ internal class MakerSwapStatus(
 @Serializable
 data class Sent(
     val transactions: List<TxHash>
+)
+
+/** `/v1/claim/hold`'s answer (zecswap-api's `relayer::Held`): held, or for a swap claimed already, what was sent. */
+@Serializable
+internal class ClaimHeld(
+    val held: Boolean = false,
+    val transactions: List<TxHash>? = null,
 )
 
 @Serializable
@@ -189,6 +210,11 @@ data class SwapAccepted(
      * Opaque, and never logged: whoever holds it has that allowance. Older makers send none.
      */
     val ticket: String? = null,
+    /**
+     * How long from `t1` the maker may refund a forward swap: its claim opens again after it. It must be the contract's
+     * `LATE_WINDOW`; none on a reverse escrow, or from a maker on a lock contract.
+     */
+    val lateWindow: Long? = null,
 )
 
 /**

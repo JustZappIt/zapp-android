@@ -19,6 +19,8 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDeposits
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendHistory
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRecord
@@ -31,8 +33,8 @@ import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
+import co.electriccoin.zcash.ui.screen.privateusd.receive.PrivateUsdReceiveArgs
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -45,6 +47,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -53,6 +56,8 @@ import org.junit.Test
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
+import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
+import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.railgun.RailgunAddress
@@ -73,6 +78,12 @@ class PrivateUsdVMTest {
     private val forwardHistory = MutableStateFlow(emptyList<AtomicSwapRecord>())
     private val reverseHistory = MutableStateFlow(emptyList<ReverseSwapRecord>())
     private val sends = MutableStateFlow(PrivateUsdSendHistory())
+    private val deposits = MutableStateFlow<PrivateUsdDeposits?>(null)
+    private val depositsRepository =
+        mockk<PrivateUsdDepositsRepository>(relaxed = true) {
+            every { state } returns deposits
+            every { history } returns flowOf(emptyList())
+        }
     private val navigation = mockk<NavigationRouter>(relaxed = true)
     private lateinit var vm: PrivateUsdVM
 
@@ -161,6 +172,25 @@ class PrivateUsdVMTest {
         }
 
     @Test
+    fun `a private send received shows in activity among what this device did, by its time`() =
+        runTest {
+            forwardHistory.value = listOf(toUsd(index = 0, at = 100, AtomicSwapOutcome.Paid))
+            reverseHistory.value = listOf(toZec(index = 1, ReversePhase.COMPLETE, acceptedAt = 300))
+            balance.value = PrivateUsdBalanceState(received = listOf(received(receivedSend(at = 200))))
+            start()
+
+            assertEquals(
+                listOf(
+                    R.string.private_usd_activity_converted_zec,
+                    R.string.private_usd_activity_received,
+                    R.string.private_usd_activity_converted,
+                ),
+                vm.state.value.activity
+                    .map { (it.title as StringResource.ByResource).resource },
+            )
+        }
+
+    @Test
     fun `a conversion into private USD under way shows as a banner that opens its progress`() =
         runTest {
             forward.value = AtomicSwapState(record = toUsd(index = 0, at = 10, outcome = null))
@@ -174,6 +204,17 @@ class PrivateUsdVMTest {
             assertEquals(stringRes(R.string.private_usd_banner_title), banner.title)
             verify(exactly = 2) { navigation.forward(PrivateUsdProgressArgs) }
             assertFalse(vm.state.value.isEmpty)
+        }
+
+    @Test
+    fun `a conversion whose claim the relayer holds says on its banner that the user may leave`() =
+        runTest {
+            val held = AtomicSwapStep.Waiting(AtomicSwapWait.CLAIM_HELD, t0 = 100, t1 = 200)
+            forward.value = AtomicSwapState(record = toUsd(index = 0, at = 10, outcome = null), wait = held)
+            start()
+
+            val banner = checkNotNull(vm.state.value.conversion)
+            assertEquals(stringRes(R.string.convert_held_short), banner.detail)
         }
 
     @Test
@@ -201,6 +242,41 @@ class PrivateUsdVMTest {
             verify { navigation.forward(PrivateUsdConvertArgs) }
         }
 
+    @Test
+    fun `Receive opens the page with the wallet's addresses`() =
+        runTest {
+            start()
+
+            vm.state.value.onReceive()
+
+            verify { navigation.forward(PrivateUsdReceiveArgs) }
+        }
+
+    @Test
+    fun `the info names the deposit address only while deposits come in`() =
+        runTest {
+            start()
+            assertTrue(stringRes(R.string.private_usd_info_receive) in vm.state.value.info.steps)
+
+            deposits.value = PrivateUsdDeposits(token = token, address = null)
+
+            val steps = vm.state.value.info.steps
+            assertTrue(stringRes(R.string.private_usd_info_receive_deposits, token.symbol) in steps)
+            assertFalse(stringRes(R.string.private_usd_info_receive) in steps)
+        }
+
+    @Test
+    fun `the page looks at the deposit addresses as it opens, and every 15 s while it shows`() =
+        runTest {
+            start()
+            verify(exactly = 1) { depositsRepository.refresh() }
+
+            advanceTimeBy(15_001)
+            verify(exactly = 2) { depositsRepository.refresh() }
+            advanceTimeBy(15_000)
+            verify(exactly = 3) { depositsRepository.refresh() }
+        }
+
     private fun TestScope.start() {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val swaps =
@@ -223,18 +299,13 @@ class PrivateUsdVMTest {
                     },
                 atomicSwapRepository = swaps,
                 senders = mockk<PrivateUsdSenders> { every { current } returns mockk() },
-                railgunMnemonicProvider =
-                    mockk {
-                        every { walletChanges } returns flowOf(Unit)
-                        coEvery { address() } throws IllegalStateException("no Railgun wallet here")
-                    },
-                copyToClipboard = mockk(relaxed = true),
                 observeConversion = ObservePrivateUsdConversionUseCase(swaps, reverseSwaps),
                 observeActivity =
                     ObservePrivateUsdActivityUseCase(
                         swaps,
                         reverseSwaps,
                         mockk<PrivateUsdSendLog> { every { observe } returns sends },
+                        depositsRepository,
                     ),
                 observeLocalCurrency =
                     mockk<ObserveLocalCurrencyUseCase> {
@@ -247,6 +318,7 @@ class PrivateUsdVMTest {
                     mockk<PrivateUsdSpendGuard> {
                         every { state } returns MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
                     },
+                depositsRepository = depositsRepository,
             )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
     }

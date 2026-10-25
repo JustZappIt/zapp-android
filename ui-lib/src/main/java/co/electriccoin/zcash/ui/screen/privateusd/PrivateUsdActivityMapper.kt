@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdActivityData
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdReceived
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
@@ -26,7 +27,22 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapResult
 import xyz.justzappit.offramp.atomicswap.ReverseSwapStatus
+import xyz.justzappit.offramp.deposits.DepositKind
+import xyz.justzappit.offramp.deposits.DepositRecord
+import xyz.justzappit.offramp.deposits.DepositState
 import java.math.BigInteger
+import kotlin.time.Clock
+import kotlin.time.Instant
+
+/** This activity with the private sends [received] among it, newest first. */
+internal fun List<PrivateUsdActivityData>.withReceived(
+    received: List<PrivateUsdReceived>
+): List<PrivateUsdActivityData> =
+    if (received.isEmpty()) {
+        this
+    } else {
+        (this + received.map(PrivateUsdActivityData::Received)).sortedByDescending { it.timestamp }
+    }
 
 /** What moved no money isn't a row. */
 class PrivateUsdActivityMapper {
@@ -38,6 +54,7 @@ class PrivateUsdActivityMapper {
         onOpenConversion: (PrivateUsdConversion) -> Unit,
         onOpenUrl: (String) -> Unit,
         onOpenRefunds: () -> Unit = {},
+        now: Instant = Clock.System.now(),
     ): PrivateUsdActivityState? {
         val date = dateTime(data.timestamp)
         return when (data) {
@@ -87,8 +104,126 @@ class PrivateUsdActivityMapper {
                     onClick = null,
                 )
             }
+
+            is PrivateUsdActivityData.Received -> {
+                received(data.received, date, deployment, currency, onOpenUrl)
+            }
+
+            is PrivateUsdActivityData.Deposit -> {
+                deposit(data.record, date, deployment, currency, onOpenUrl, now)
+            }
         }
     }
+
+    // Public USDC received at a deposit address and shielded with nothing to tap: on its way until it's mined, then
+    // screened a while before it can be spent. One that never moved anything, refused or replaced, isn't a row.
+    private fun deposit(
+        record: DepositRecord,
+        date: StringResource,
+        deployment: AtomicSwapDeployment,
+        currency: LocalCurrency,
+        onOpenUrl: (String) -> Unit,
+        now: Instant,
+    ): PrivateUsdActivityState? {
+        val landedAt = record.landing?.at
+        val isScreening = landedAt != null && now.epochSeconds - landedAt < deployment.screeningTime.inWholeSeconds
+        val status = depositStatus(record, isScreening) ?: return null
+        val isSettled = record.state == DepositState.LANDED && !isScreening
+        val transaction = record.landing?.transaction ?: record.transactions.lastOrNull()
+        val token = deployment.usdcDeposits?.let { dollarToken(deployment, it.token) }
+        return moved(token, record.arrives)?.let { got ->
+            PrivateUsdActivityState(
+                key = "deposit-${record.id}",
+                title =
+                    if (record.kind == DepositKind.RESCUE) {
+                        stringRes(R.string.private_usd_activity_deposit_rescue)
+                    } else {
+                        stringRes(R.string.private_usd_activity_deposit, got.token.symbol)
+                    },
+                detail = joinDetail(date, stringRes(status)),
+                amount = got.signed(R.string.private_usd_activity_in),
+                local = got.local(currency),
+                tone = if (isSettled) PrivateUsdActivityTone.IN else PrivateUsdActivityTone.NEUTRAL,
+                onClick = transaction?.let { hash -> { onOpenUrl(deployment.explorerTxUrl + hash.hex) } },
+                onClickLabel = transaction?.let { stringRes(R.string.private_usd_activity_open_transaction) },
+                isPending = !isSettled,
+            )
+        }
+    }
+
+    // In once Railgun's screening clears it; until then it can't be spent, and says so with a spinner.
+    private fun received(
+        received: PrivateUsdReceived,
+        date: StringResource,
+        deployment: AtomicSwapDeployment,
+        currency: LocalCurrency,
+        onOpenUrl: (String) -> Unit,
+    ): PrivateUsdActivityState? {
+        val send = received.send
+        val sender = send.sender
+        val status =
+            when {
+                !send.isSettled -> {
+                    stringRes(R.string.private_usd_activity_received_screening)
+                }
+
+                sender == null -> {
+                    stringRes(R.string.private_usd_activity_sender_hidden)
+                }
+
+                else -> {
+                    stringRes(
+                        R.string.private_usd_activity_from,
+                        sender.value.ellipsizeAddress(ADDRESS_HEAD, ADDRESS_TAIL),
+                    )
+                }
+            }
+        return moved(received.token, send.amount)?.let { got ->
+            PrivateUsdActivityState(
+                key = received.key,
+                title = stringRes(R.string.private_usd_activity_received),
+                detail = joinDetail(date, status),
+                amount = got.signed(R.string.private_usd_activity_in),
+                local = got.local(currency),
+                tone = if (send.isSettled) PrivateUsdActivityTone.IN else PrivateUsdActivityTone.NEUTRAL,
+                onClick = { onOpenUrl(deployment.explorerTxUrl + send.txid.hex) },
+                onClickLabel = stringRes(R.string.private_usd_activity_open_transaction),
+                isPending = !send.isSettled,
+            )
+        }
+    }
+
+    // Where a deposit stands, as Activity says it; none for one that moved nothing.
+    @StringRes
+    private fun depositStatus(
+        record: DepositRecord,
+        isScreening: Boolean,
+    ): Int? =
+        when (record.state) {
+            DepositState.LANDED -> {
+                if (isScreening) {
+                    R.string.private_usd_activity_received_screening
+                } else {
+                    R.string.private_usd_activity_deposit_shielded
+                }
+            }
+
+            DepositState.SIGNED -> {
+                if (record.waiting) {
+                    R.string.private_usd_activity_deposit_waiting
+                } else {
+                    R.string.private_usd_activity_deposit_shielding
+                }
+            }
+
+            DepositState.SENT -> {
+                R.string.private_usd_activity_deposit_shielding
+            }
+
+            DepositState.REFUSED, DepositState.REVERTED, DepositState.REPLACED, DepositState.EXPIRED -> {
+                null
+            }
+        }
 
     private fun toUsd(
         record: AtomicSwapRecord,

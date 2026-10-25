@@ -130,6 +130,8 @@ import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertScreen
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressScreen
+import co.electriccoin.zcash.ui.screen.privateusd.receive.PrivateUsdReceiveArgs
+import co.electriccoin.zcash.ui.screen.privateusd.receive.PrivateUsdReceiveScreen
 import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
 import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsScreen
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
@@ -449,6 +451,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<PrivateUsdConvertArgs> { PrivateUsdConvertScreen() }
         composable<PrivateUsdProgressArgs> { PrivateUsdProgressScreen() }
         composable<PrivateUsdSendArgs> { PrivateUsdSendScreen(it.toRoute()) }
+        composable<PrivateUsdReceiveArgs> { PrivateUsdReceiveScreen() }
         dialogComposable<DebugTextArgs> { DebugTextScreen(it.toRoute()) }
         composable<ResyncConfirmArgs> { ResyncConfirmScreen() }
         composable<ResyncDateArgs> { ResyncDateScreen(it.toRoute()) }

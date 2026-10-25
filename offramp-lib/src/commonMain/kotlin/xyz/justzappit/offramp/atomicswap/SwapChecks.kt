@@ -16,7 +16,8 @@ internal fun MakerInfo.requireServing(
             chainId == deployment.chainId &&
             contract == deployment.contract &&
             token == deployment.token &&
-            zcashNetwork == deployment.zcashNetwork
+            zcashNetwork == deployment.zcashNetwork &&
+            fitsWindows(contractKind, minWindow, lateWindow, deployment.windows)
     if (!serves || (reverse && !reverseEnabled)) {
         throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "the maker serves another deployment")
     }
@@ -27,13 +28,14 @@ internal fun MakerInfo.requireServing(
     }
 }
 
-/** The fee these terms ask, once they're [deployment]'s own relayer's, not its maker's. */
+/** The fee these terms ask, once they're [deployment]'s own relayer's, not its maker's, on its contract's windows. */
 internal fun RelayerTerms.checkedFee(deployment: SwapDeployment): Usdc6 {
     val serves =
         chainId == deployment.chainId &&
             contract == deployment.contract &&
             relayer == deployment.relayer &&
-            relayer != deployment.maker
+            relayer != deployment.maker &&
+            fitsWindows(contractKind, minWindow, lateWindow, deployment.windows)
     if (!serves) throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "another deployment's relayer")
     return fee
 }
@@ -52,17 +54,25 @@ internal fun requirePaysOut(
     if (fee >= amount) throw AtomicSwapBlockedException(AtomicSwapBlock.RELAYER_FEE, "a fee of $fee leaves nothing")
 }
 
-/** Whether the contract gives us a lock at [now]: none is held, nor is it the other side's turn after ours lapsed. */
-internal fun mayTakeLock(
-    own: Long,
-    other: Long,
-    now: Long,
-    lockDuration: Long,
-): Boolean {
-    require(own >= 0 && other >= 0 && now >= 0 && lockDuration > 0)
-    val isHeld = now < own || now < other
-    val isTheirTurn = own > other && (now < own || now - own < lockDuration)
-    return !isHeld && !isTheirTurn
-}
+/**
+ * Whether what a service says of its contract fits the deployment's [windows], as `zecswap_api::fits_windows` has it:
+ * what it doesn't say fits, as the contract itself is read either way, and a service of a lock contract says none.
+ */
+internal fun fitsWindows(
+    kind: String?,
+    minWindow: Long?,
+    lateWindow: Long?,
+    windows: SwapWindows?,
+): Boolean =
+    if (windows == null) {
+        kind == null && minWindow == null && lateWindow == null
+    } else {
+        (kind == null || kind == WINDOWS_CONTRACT) &&
+            (minWindow == null || minWindow == windows.min) &&
+            (lateWindow == null || lateWindow == windows.late)
+    }
 
 private const val MAKER_API_VERSION = 1
+
+/** What the services call the windows contract (`contractKind`). */
+private const val WINDOWS_CONTRACT = "windows"
