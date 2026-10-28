@@ -129,9 +129,13 @@ class AndroidPreferenceProvider(
 
             editor.clear()
 
+            // Committed before it's announced: an observer reads the preference on the announcement, and what it
+            // must find is the cleared store, not what the clear was about to remove.
+            val cleared = editor.commit()
+
             clearPipeline.emit(Unit)
 
-            return@withContext editor.commit()
+            return@withContext cleared
         }
 
     override fun observe(key: PreferenceKey): Flow<String?> =

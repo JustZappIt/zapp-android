@@ -32,6 +32,7 @@ dependencies {
     implementation(projects.spackleAndroidLib)
 
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlinx.coroutines.test)
 
     androidTestImplementation(libs.bundles.androidx.test)
     androidTestImplementation(libs.kotlinx.coroutines.test)
