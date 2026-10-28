@@ -33,6 +33,7 @@ import co.electriccoin.zcash.ui.common.usecase.DeleteChatIdentityUseCase
 import co.electriccoin.zcash.ui.common.usecase.DeleteTransactionNoteUseCase
 import co.electriccoin.zcash.ui.common.usecase.DeriveKeystoneAccountUnifiedAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.DisconnectUseCase
+import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnfinishedConversionsUseCase
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.EnsureSwapAssetsLoadedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
@@ -392,6 +393,8 @@ val useCaseModule =
         factoryOf(::CreateIncreaseEphemeralGapLimitProposalUseCase)
         factoryOf(::ResetZashiUseCase)
         factoryOf(::EnsureNoUnsharedGiftFundsUseCase)
+        // Its clock is a default, so no constructor reference: Koin would look the clock up.
+        factory { EnsureNoUnfinishedConversionsUseCase(get(), get(), get(), get()) }
         factoryOf(::CheckGiftCardClaimedUseCase)
         factoryOf(::PreselectSwapAssetUseCase)
         singleOf(::RecoverFromSeedMismatchUseCase)

@@ -18,30 +18,38 @@ import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.AddressBookRepository
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
+import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.FlexaRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
+import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnfinishedConversionsUseCase
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
+import co.electriccoin.zcash.ui.common.usecase.UnfinishedConversionsException
 import co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException
 import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
 import co.electriccoin.zcash.ui.screen.tabs.view.ZappTab
+import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * A wipe must not be able to destroy the only key material that can reach a gift card's funds.
- * The ephemeral seed is random rather than derived from the wallet seed and there is no reclaim,
- * so `gift_cards_v1` — inside the encrypted preferences this use case clears — is the only copy.
+ * A wipe must not be able to destroy the only key material that can reach a gift card's funds, nor the records
+ * carrying a Shielded USD conversion to its end, and once the user has authenticated it must run to its end: the
+ * preferences holding the seed are cleared whatever stalls on the way.
  */
 class ResetZashiUseCaseTest {
     @Test
@@ -65,14 +73,63 @@ class ResetZashiUseCaseTest {
         }
 
     @Test
+    fun `refuses to reset while a conversion is under way`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false, hasUnfinishedConversions = true)
+
+            assertFailsWith<UnfinishedConversionsException> { fixture.useCase(keepFiles = true) }
+
+            fixture.assertNothingWasDestroyed()
+        }
+
+    @Test
     fun `resets once every gift card link has been handed out`() =
         runTest {
             val fixture = Fixture(hasUnsharedFunds = false)
 
-            fixture.useCase(keepFiles = true)
+            assertEquals(ResetZashiResult.WIPED, fixture.useCase(keepFiles = true))
 
             coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
             coVerify(exactly = 1) { fixture.biometricRepository.requestBiometrics(any()) }
+        }
+
+    @Test
+    fun `a cancelled prompt wipes nothing and says so`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false, isAuthenticated = false)
+
+            assertEquals(ResetZashiResult.NOT_AUTHENTICATED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 1) { fixture.biometricRepository.requestBiometrics(any()) }
+            coVerify(exactly = 0) { fixture.encryptedPreferences.clearPreferences() }
+            coVerify(exactly = 0) { fixture.standardPreferences.clearPreferences() }
+            coVerify(exactly = 0) { fixture.atomicSwapRepository.reset() }
+            coVerify(exactly = 0) { fixture.railgunWalletRepository.reset() }
+            coVerify(exactly = 0) { fixture.walletCoordinator.deleteSdkDataFlow() }
+        }
+
+    @Test
+    fun `the caller's own step runs after the prompt and before the first irreversible one`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            val events = mutableListOf<String>()
+            coEvery { fixture.biometricRepository.requestBiometrics(any()) } answers { events += "prompt" }
+            coEvery { fixture.atomicSwapRepository.reset() } answers { events += "wipe" }
+
+            fixture.useCase(keepFiles = true, beforeWipe = { events += "caller" })
+
+            assertEquals(listOf("prompt", "caller", "wipe"), events)
+        }
+
+    @Test
+    fun `a cancelled prompt leaves the caller's step undone`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false, isAuthenticated = false)
+            var ran = false
+
+            fixture.useCase(keepFiles = true, beforeWipe = { ran = true })
+
+            assertEquals(false, ran)
         }
 
     @Test
@@ -89,6 +146,52 @@ class ResetZashiUseCaseTest {
                 fixture.railgunWalletRepository.reset()
                 fixture.encryptedPreferences.clearPreferences()
             }
+        }
+
+    @Test
+    fun `a conversion loop that never stops does not hold up the seed`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            coEvery { fixture.atomicSwapRepository.reset() } coAnswers { awaitCancellation() }
+
+            assertEquals(ResetZashiResult.WIPED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 1) { fixture.railgunWalletRepository.reset() }
+            coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
+    @Test
+    fun `a teardown that fails does not hold up the seed`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            coEvery { fixture.railgunWalletRepository.reset() } throws IllegalStateException("page gone")
+
+            assertEquals(ResetZashiResult.WIPED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
+    @Test
+    fun `a teardown whose own timeout fires does not hold up the seed`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            coEvery { fixture.railgunWalletRepository.reset() } coAnswers { withTimeout(1) { awaitCancellation() } }
+
+            assertEquals(ResetZashiResult.WIPED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
+    @Test
+    fun `the preferences are cleared when the SDK's delete never answers`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            every { fixture.walletCoordinator.deleteSdkDataFlow() } returns flow { awaitCancellation() }
+
+            assertEquals(ResetZashiResult.WIPED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 1) { fixture.standardPreferences.clearPreferences() }
+            coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
         }
 
     @Test
@@ -112,8 +215,20 @@ class ResetZashiUseCaseTest {
             coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
         }
 
+    @Test
+    fun `explicit confirmation may lose a conversion under way`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false, hasUnfinishedConversions = true)
+
+            fixture.useCase(keepFiles = true, allowConversionLoss = true)
+
+            coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
     private class Fixture(
         hasUnsharedFunds: Boolean?,
+        hasUnfinishedConversions: Boolean = false,
+        isAuthenticated: Boolean = true,
     ) {
         val encryptedPreferences = mockk<PreferenceProvider>(relaxed = true)
         val standardPreferences = mockk<PreferenceProvider>(relaxed = true)
@@ -128,6 +243,7 @@ class ResetZashiUseCaseTest {
         val selectedTabRepository = SelectedTabRepository()
 
         val giftCardStorageProvider = mockk<GiftCardStorageProvider>()
+        private val ensureNoUnfinishedConversions = mockk<EnsureNoUnfinishedConversionsUseCase>()
         private val synchronizerProvider = mockk<SynchronizerProvider>()
         private val standardPreferenceProvider = mockk<StandardPreferenceProvider>()
         private val encryptedPreferenceProvider = mockk<EncryptedPreferenceProvider>()
@@ -139,6 +255,14 @@ class ResetZashiUseCaseTest {
                 coEvery { giftCardStorageProvider.hasUnsharedFunds() } throws IllegalStateException("undecodable")
             } else {
                 coEvery { giftCardStorageProvider.hasUnsharedFunds() } returns hasUnsharedFunds
+            }
+            if (hasUnfinishedConversions) {
+                coEvery { ensureNoUnfinishedConversions() } throws UnfinishedConversionsException(count = 1)
+            } else {
+                coEvery { ensureNoUnfinishedConversions() } just Runs
+            }
+            if (!isAuthenticated) {
+                coEvery { biometricRepository.requestBiometrics(any()) } throws BiometricsCancelledException()
             }
             every { walletCoordinator.deleteSdkDataFlow() } returns flowOf(true)
             coEvery { synchronizerProvider.getSynchronizer() } returns mockk<CloseableSynchronizer>(relaxed = true)
@@ -165,6 +289,7 @@ class ResetZashiUseCaseTest {
                             giftCardStorageProvider,
                             mockk(relaxed = true),
                         ),
+                    ensureNoUnfinishedConversions = ensureNoUnfinishedConversions,
                     atomicSwapRepository = atomicSwapRepository,
                     reverseSwapRepository = reverseSwapRepository,
                     railgunWalletRepository = railgunWalletRepository,

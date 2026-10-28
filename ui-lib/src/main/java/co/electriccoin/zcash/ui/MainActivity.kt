@@ -43,6 +43,8 @@ import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.provider.CHAT_CONVERSATION_ID_EXTRA
 import co.electriccoin.zcash.ui.common.push.ChatNotificationTiming
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
+import co.electriccoin.zcash.ui.common.security.AppLock
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationUIState
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationViewModel
 import co.electriccoin.zcash.ui.common.viewmodel.OldHomeViewModel
@@ -114,6 +116,7 @@ class MainActivity : FragmentActivity() {
     private val reverseSwapRepository: ReverseSwapRepository by inject()
     private val atomicSwapRepository: AtomicSwapRepository by inject()
     private val privateUsdDeposits: PrivateUsdDepositsRepository by inject()
+    private val railgunWallet: RailgunWalletRepository by inject()
 
     private val groupInvites: GroupInviteCoordinator by inject()
 
@@ -129,7 +132,7 @@ class MainActivity : FragmentActivity() {
 
         monitorForBackgroundSync()
 
-        watchDepositsWhileUnlocked()
+        watchShieldedUsdWhileUnlocked()
 
         forwardUriIntent(intent, resumeReclaim = true)
         forwardChatNotificationIntent(intent)
@@ -488,22 +491,24 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    // Shielded USD's deposit addresses are looked at only while Zapp is open and its lock is passed: a deposit under
-    // way waits meanwhile, safe at its address.
-    private fun watchDepositsWhileUnlocked() {
+    // Shielded USD follows Zapp's lock: its deposit addresses are looked at only while Zapp is open and its lock is
+    // passed (a deposit under way waits meanwhile, safe at its address), and its page, which holds the wallet's keys,
+    // closes at once when the authentication gate is up, and after the gate's timeout once Zapp is in the background.
+    private fun watchShieldedUsdWhileUnlocked() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 try {
-                    authenticationViewModel.appAccessAuthenticationResultState.collect { state ->
-                        privateUsdDeposits.onAppUnlocked(
-                            state == AuthenticationUIState.NotRequired || state == AuthenticationUIState.Successful
-                        )
-                    }
+                    authenticationViewModel.appAccessAuthenticationResultState.collect { onShieldedUsdLock(it.appLock) }
                 } finally {
-                    privateUsdDeposits.onAppUnlocked(false)
+                    onShieldedUsdLock(AppLock.LOCKED)
                 }
             }
         }
+    }
+
+    private fun onShieldedUsdLock(lock: AppLock) {
+        privateUsdDeposits.onAppUnlocked(lock == AppLock.UNLOCKED)
+        railgunWallet.onAppLock(lock)
     }
 
     private fun monitorForBackgroundSync() {
@@ -535,3 +540,12 @@ class MainActivity : FragmentActivity() {
         internal val SPLASH_SCREEN_DELAY = 0.seconds
     }
 }
+
+// The gate is up once Zapp was away past its timeout, or on a cold start; Initial is the gate not yet decided.
+private val AuthenticationUIState.appLock: AppLock
+    get() =
+        when (this) {
+            AuthenticationUIState.NotRequired, AuthenticationUIState.Successful -> AppLock.UNLOCKED
+            is AuthenticationUIState.Required -> AppLock.GATE_UP
+            AuthenticationUIState.Initial -> AppLock.LOCKED
+        }

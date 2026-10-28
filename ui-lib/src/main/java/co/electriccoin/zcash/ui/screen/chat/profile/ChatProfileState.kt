@@ -35,11 +35,23 @@ data class ChatProfileEditNameDialogState(
 )
 
 data class ChatProfileDeleteDialogState(
+    val kind: Kind,
     val onConfirm: () -> Unit,
     val onDismiss: () -> Unit,
-    /** A refusal rather than a confirmation: [onConfirm] reviews the cards instead of deleting. */
-    val isBlockedByGiftCards: Boolean = false,
-)
+    /** Only with [Kind.CONVERSIONS_BLOCKED]: deletes after all, losing the conversion under way. */
+    val onDeleteAnyway: (() -> Unit)? = null,
+) {
+    enum class Kind {
+        /** Asks whether to delete: [onConfirm] deletes. */
+        CONFIRM,
+
+        /** A refusal rather than a confirmation: [onConfirm] reviews the cards instead of deleting. */
+        GIFT_CARDS_BLOCKED,
+
+        /** A refusal: [onConfirm] opens Shielded USD to see the conversion; [onDeleteAnyway] gives it up. */
+        CONVERSIONS_BLOCKED,
+    }
+}
 
 data class ChatProfileSeedPhraseDialogState(
     val words: List<String>,

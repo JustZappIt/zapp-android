@@ -143,6 +143,9 @@ class PrivateUsdSendLog(
 
     suspend fun hasUnsettled(): Boolean = lock.withLock { read().isUnsettled }
 
+    /** How many sends are still proving or unsettled; an unreadable log throws here too, as [hasUnsettled] does. */
+    suspend fun unsettledCount(): Int = lock.withLock { read().unsettledCount }
+
     suspend fun begin(send: PrivateUsdPendingSend) {
         live += send.id
         change { it.copy(pending = it.pending + send) }
@@ -197,7 +200,9 @@ class PrivateUsdSendLog(
         val pending: List<PrivateUsdPendingSend> = emptyList(),
     )
 
-    private val Log.isUnsettled: Boolean get() = sends.any { !it.confirmed } || pending.any { it.id in live }
+    private val Log.unsettledCount: Int get() = sends.count { !it.confirmed } + pending.count { it.id in live }
+
+    private val Log.isUnsettled: Boolean get() = unsettledCount > 0
 
     private companion object {
         const val PREF_KEY = "private_usd_sends_v2"

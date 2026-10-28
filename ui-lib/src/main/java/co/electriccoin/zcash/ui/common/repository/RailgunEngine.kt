@@ -6,24 +6,34 @@ package co.electriccoin.zcash.ui.common.repository
 import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
 import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
+import co.electriccoin.zcash.ui.common.security.AUTHENTICATE_TIMEOUT
+import co.electriccoin.zcash.ui.common.security.AppLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import xyz.justzappit.railgun.RailgunNetwork
 import xyz.justzappit.railgun.RailgunSession
 import xyz.justzappit.railgun.RailgunWallet
 import kotlin.time.Duration.Companion.minutes
 
-/** The engine, one use at a time, each run in [scope] to its end so no caller frees it while the page works. */
+/**
+ * The engine, one use at a time, each run in [scope] to its end so no caller frees it while the page works. The page
+ * follows the app's lock as well as its uses ([onAppLock]): the authentication gate up closes it at once, and a lock
+ * in the background once it has lasted the gate's timeout.
+ */
 internal class RailgunEngine(
     private val wallet: RailgunWallet,
     private val keyProvider: RailgunKeyProvider,
@@ -41,9 +51,20 @@ internal class RailgunEngine(
     @Volatile
     private var isReset = false
 
+    // Whether a background lock's grace is under way, or the page is closed for the app's lock: then nothing runs
+    // until the unlock.
+    private val lockState = MutableStateFlow(LockState.UNLOCKED)
+
+    // The grace; not under [work], whose children the close cancels.
+    @Volatile
+    private var grace: Job? = null
+
     suspend fun <T> withSession(block: suspend (RailgunSession) -> T): T =
         scope
             .async(work) {
+                check(!isReset) { "the wallet is being reset" }
+                // Before the mutex, never under it: a reset or a wallet change mustn't wait on the app's lock.
+                lockState.first { it != LockState.CLOSED }
                 lock.withLock {
                     check(!isReset) { "the wallet is being reset" }
                     idleClose?.cancel()
@@ -70,11 +91,41 @@ internal class RailgunEngine(
     }
 
     /**
+     * The app's lock changed to [lock]. The gate up ([AppLock.GATE_UP]) closes the page at once, stopping the uses in
+     * flight as a reset does, which drops the wallet's keys. A lock in the background ([AppLock.LOCKED]) does the same
+     * once it has lasted [AUTHENTICATE_TIMEOUT], after which the app would ask to authenticate again, and leaves the
+     * page to its uses meanwhile, so a sync carries on across a short background. Once closed, a new use waits for the
+     * unlock ([AppLock.UNLOCKED]), which opens the page again.
+     */
+    fun onAppLock(lock: AppLock) {
+        when (lock) {
+            AppLock.UNLOCKED -> {
+                grace?.cancel()
+                lockState.value = LockState.UNLOCKED
+            }
+
+            AppLock.LOCKED -> {
+                if (lockState.compareAndSet(LockState.UNLOCKED, LockState.GRACE)) {
+                    grace = scope.launch { closeAfterGrace() }
+                }
+            }
+
+            AppLock.GATE_UP -> {
+                grace?.cancel()
+                if (lockState.getAndUpdate { LockState.CLOSED } != LockState.CLOSED) scope.launch { closeForLock() }
+            }
+        }
+    }
+
+    /**
      * Stops every use and deletes what the engine stored, as far as the WebView lets it: what's left is
      * encrypted with a key the reset deletes. Nothing runs again until the wallet changes.
      */
     suspend fun reset() {
         isReset = true
+        // A grace under way has nothing left to close; the page stays closed until the unlock all the same.
+        grace?.cancel()
+        lockState.compareAndSet(LockState.GRACE, LockState.CLOSED)
         work.cancelChildren()
         work.children.forEach { it.join() }
         lock.withLock {
@@ -115,13 +166,35 @@ internal class RailgunEngine(
 
     private suspend fun closeWhenIdle() {
         delay(IDLE_CLOSE)
-        lock.withLock {
-            wallet.close()
-            state.update {
-                it.copy(phase = RailgunWalletState.Phase.IDLE, utxoScan = null, txidScan = null, proof = null)
+        lock.withLock { closePage() }
+    }
+
+    // The grace is the gate's timeout: an app away for longer authenticates again before anything of its shows.
+    private suspend fun closeAfterGrace() {
+        delay(AUTHENTICATE_TIMEOUT)
+        if (lockState.compareAndSet(LockState.GRACE, LockState.CLOSED)) closeForLock()
+    }
+
+    // Once the page is closed for the lock: the uses in flight stop, as in a reset, and the page closes. Never cut
+    // short: an unlock meanwhile finds the page closed, and its next use opens it again.
+    private suspend fun closeForLock() =
+        withContext(NonCancellable) {
+            work.cancelChildren()
+            lock.withLock {
+                idleClose?.cancel()
+                closePage()
             }
         }
+
+    // Under the lock. With no page open there is nothing to close: its keys went with it.
+    private suspend fun closePage() {
+        if (wallet.session != null) wallet.close()
+        state.update {
+            it.copy(phase = RailgunWalletState.Phase.IDLE, utxoScan = null, txidScan = null, proof = null)
+        }
     }
+
+    private enum class LockState { UNLOCKED, GRACE, CLOSED }
 
     private companion object {
         val IDLE_CLOSE = 10.minutes

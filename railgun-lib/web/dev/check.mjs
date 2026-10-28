@@ -1,6 +1,5 @@
 // Drives the built bundle in headless Chrome through the same MessagePort protocol as the app.
-//   npm run check                 builds a deposit note for a fresh wallet on Sepolia and opens it here, syncs the
-//                                 wallet, then reopens it from IndexedDB
+//   npm run check                 opens a fresh wallet on Sepolia, syncs it, then reopens it from IndexedDB
 //   npm run check -- --transact   sends privately to itself through the relayer, which pays the gas, with
 //                                 the wallet RAILGUN_DEV_MNEMONIC in local.properties names, which must hold
 //                                 the relayer's token; Chrome keeps dev/.profile between runs
@@ -12,7 +11,6 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { JsonRpcProvider, Mnemonic } from 'ethers';
 import puppeteer from 'puppeteer-core';
-import { openDepositNote } from '../src/deposit-note.js';
 
 const require = createRequire(import.meta.url);
 const ASSETS = path.resolve('../src/main/assets/railgun');
@@ -28,7 +26,7 @@ const SPENDABLE_TIMEOUT_MS = 30 * 60_000;
 const CONFIRM_TIMEOUT_MS = 120_000;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
 
-/** The wallet Railgun's engine derives in Node, to compare with the browser's: its address and the keys a note needs. */
+/** The wallet Railgun's engine derives in Node, to compare with the browser's: its address. */
 async function expectedWallet(mnemonic) {
   const dist = path.dirname(require.resolve('@railgun-community/engine'));
   const load = (module) => require(path.join(dist, module));
@@ -41,20 +39,7 @@ async function expectedWallet(mnemonic) {
   const viewing = await nodes.viewing.getViewingKeyPair();
   const nullifyingKey = await nodes.viewing.getNullifyingKey();
   const masterPublicKey = WalletNode.getMasterPublicKey(nodes.spending.getSpendingKeyPair().pubkey, nullifyingKey);
-  return {
-    address: encodeAddress({ masterPublicKey, viewingPublicKey: viewing.pubkey }),
-    masterPublicKey,
-    viewingPrivateKey: viewing.privateKey,
-  };
-}
-
-/** The page's note for a deposit to the wallet, opened here with the keys Node derives: the receiver's view of it. */
-async function depositNoteCheck(call, expected) {
-  const note = await call('depositNote', {});
-  const fields = Object.keys(note).sort().join(', ');
-  if (fields !== 'encryptedBundle, npk, shieldKey') throw new Error(`the page's deposit note gave out ${fields}`);
-  await openDepositNote(note, expected);
-  console.log("  a deposit note the page built opens with the wallet's viewing key, derived here");
+  return { address: encodeAddress({ masterPublicKey, viewingPublicKey: viewing.pubkey }) };
 }
 
 /** The refresh's received sends: a list, empty for a fresh wallet; null would mean the page can't read its history. */
@@ -163,8 +148,6 @@ async function syncCheck(page, url, onEvent) {
     const { address } = await call('openNewWallet', { encryptionKey, mnemonic, creationBlock: fromBlock });
     if (address !== expected.address) throw new Error(`the browser opened ${address}, Node derives ${expected.address}`);
     console.log(`  address matches Node's derivation: ${address.slice(0, 16)}…`);
-    // Before any sync: a deposit doesn't wait for one.
-    await depositNoteCheck(call, expected);
     const refreshed = await call('refresh', {});
     console.log(`  balances ${JSON.stringify(refreshed.balances)}`);
     receivedCheck(refreshed);

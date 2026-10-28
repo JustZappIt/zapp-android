@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cloud backup and device-to-device transfer carry the address book alone, as the pre-12 rules
+  (auto_backup_config.xml) do. A missing <device-transfer> section would mean a transfer carries
+  the whole data directory: the Railgun page's IndexedDB under app_webview, where the Shielded USD
+  wallet's note history is kept in plaintext, and the preferences, whose Keystore key never
+  transfers. The new device restores both from the seed phrase and syncs afresh instead.
+-->
 <data-extraction-rules>
     <cloud-backup disableIfNoEncryptionCapabilities="true">
         <include
@@ -6,4 +13,9 @@
             path="address_book/." />
         <!-- metadata excluded: may contain sensitive transaction/contact info -->
     </cloud-backup>
+    <device-transfer>
+        <include
+            domain="file"
+            path="address_book/." />
+    </device-transfer>
 </data-extraction-rules>

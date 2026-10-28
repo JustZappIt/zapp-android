@@ -18,6 +18,7 @@ import co.electriccoin.zcash.spackle.AndroidApiVersion
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
+import co.electriccoin.zcash.ui.common.security.AUTHENTICATE_TIMEOUT
 import co.electriccoin.zcash.ui.common.security.PinAuthGate
 import co.electriccoin.zcash.ui.preference.AuthMethod
 import co.electriccoin.zcash.ui.preference.EncryptedPreferenceKeys
@@ -41,10 +42,8 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
 
 private const val DEFAULT_INITIAL_DELAY = 0
-private val AUTHENTICATE_TIMEOUT = 15.minutes.inWholeMilliseconds
 
 class AuthenticationViewModel(
     application: Application,
@@ -216,7 +215,7 @@ class AuthenticationViewModel(
                     // Wall-clock went backward → clock manipulation, treat as expired.
                     nowWalltime < storedWalltime -> true
 
-                    else -> (nowRealtime - storedRealtime) > AUTHENTICATE_TIMEOUT
+                    else -> (nowRealtime - storedRealtime) > AUTHENTICATE_TIMEOUT.inWholeMilliseconds
                 }
 
             if (expired) resetEntireAuthenticationState()

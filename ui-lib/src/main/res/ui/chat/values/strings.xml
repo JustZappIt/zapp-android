@@ -139,6 +139,10 @@
     <string name="chat_profile_delete_gift_cards_title">Unshared Zpackets</string>
     <string name="chat_profile_delete_gift_cards_message">You have funded Zpackets whose links you have not shared yet. Deleting erases them, and your recovery phrase cannot bring them back. Share or copy each link first.</string>
     <string name="chat_profile_delete_gift_cards_review">Review Zpackets</string>
+    <string name="chat_profile_delete_conversions_title">Conversion under way</string>
+    <string name="chat_profile_delete_conversions_message">A Shielded USD conversion is still under way. Deleting now loses the funds in it. Let it finish first, or delete anyway.</string>
+    <string name="chat_profile_delete_conversions_review">Review</string>
+    <string name="chat_profile_delete_conversions_delete_anyway">Delete anyway</string>
     <string name="chat_profile_delete_dialog_confirm">Delete</string>
     <string name="chat_profile_delete_dialog_cancel">Cancel</string>
 

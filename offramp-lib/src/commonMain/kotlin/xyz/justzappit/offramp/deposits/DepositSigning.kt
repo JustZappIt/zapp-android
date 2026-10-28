@@ -12,9 +12,9 @@ import xyz.justzappit.offramp.p2p.Usdc6
 
 /**
  * Signs deposits and rescues as zecSwap's `docs/deposits.md` does, each into a record to keep before it's posted. The
- * note comes from the wallet's Railgun engine, which opened it with the wallet's viewing key, so what lands is the
- * wallet's own; the nonce commits to it, the fee and the relayer's deposits account, so the relayer can delay a
- * deposit but never redirect it.
+ * note is built from the wallet's seed to its own Railgun keys and opened with its viewing key ([DepositNotes]), so
+ * what lands is the wallet's own; the nonce commits to it, the fee and the relayer's deposits account, so the relayer
+ * can delay a deposit but never redirect it.
  */
 internal class DepositSigning(
     private val pin: DepositsPin,
@@ -41,9 +41,9 @@ internal class DepositSigning(
             DepositFees.capped(terms, value)
                 ?: throw DepositsException(DepositProblem.FEE_OVER_CAP, "the relayer's fee is over the cap")
         val token = chain.tokenDomain()
-        val note = notes.note()
         val createdAt = now()
         val validBefore = maxOf(createdAt + terms.validity, after + 1)
+        val note = notes.shield(index, validBefore)
         val signed =
             keys.withKey(index) { key ->
                 val nonce = deposits.depositNonce(note, fee, terms.relayer)
@@ -88,7 +88,7 @@ internal class DepositSigning(
         nonce: Long,
         terms: DepositTerms,
     ): DepositRecord {
-        val note = notes.note()
+        val note = notes.rescue(index, nonce)
         val createdAt = now()
         val deadline = createdAt + terms.validity
         val signed =
