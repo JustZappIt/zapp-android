@@ -16,5 +16,9 @@
     <string name="delete_wallet_gift_cards_message">Resetting now permanently deletes Zpacket links that can still control funds. Review and resolve them first, or delete them anyway to start fresh.</string>
     <string name="delete_wallet_gift_cards_review">Review Zpackets</string>
     <string name="delete_wallet_gift_cards_delete_anyway">Delete anyway</string>
+    <string name="delete_wallet_conversions_title">Conversion under way</string>
+    <string name="delete_wallet_conversions_message">A Shielded USD conversion is still under way. Resetting now loses the funds in it. Let it finish first, or delete anyway.</string>
+    <string name="delete_wallet_conversions_review">Review conversion</string>
+    <string name="delete_wallet_conversions_delete_anyway">Delete anyway</string>
     <string name="delete_wallet_failed">Wallet deletion failed. Try it again, please.</string>
 </resources>

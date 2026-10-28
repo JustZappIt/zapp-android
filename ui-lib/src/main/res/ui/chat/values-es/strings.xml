@@ -139,6 +139,10 @@
     <string name="chat_profile_delete_gift_cards_title">Zpackets no compartidos</string>
     <string name="chat_profile_delete_gift_cards_message">Tienes Zpackets financiados cuyos enlaces aún no has compartido. Al eliminar se borran, y tu frase de recuperación no puede recuperarlos. Comparte o copia cada enlace primero.</string>
     <string name="chat_profile_delete_gift_cards_review">Revisar Zpackets</string>
+    <string name="chat_profile_delete_conversions_title">Conversión en curso</string>
+    <string name="chat_profile_delete_conversions_message">Una conversión de USD protegido sigue en curso. Eliminar ahora pierde los fondos que contiene. Deja que termine primero, o elimínala de todos modos.</string>
+    <string name="chat_profile_delete_conversions_review">Revisar</string>
+    <string name="chat_profile_delete_conversions_delete_anyway">Eliminar de todos modos</string>
     <string name="chat_profile_delete_dialog_confirm">Eliminar</string>
     <string name="chat_profile_delete_dialog_cancel">Cancelar</string>
 

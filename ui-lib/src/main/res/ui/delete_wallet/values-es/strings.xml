@@ -17,5 +17,9 @@
     <string name="delete_wallet_gift_cards_message">Restablecer ahora elimina permanentemente enlaces de Zpacket que aún pueden controlar fondos. Revísalos y resuélvelos primero, o elimínalos de todos modos para empezar de cero.</string>
     <string name="delete_wallet_gift_cards_review">Revisar Zpackets</string>
     <string name="delete_wallet_gift_cards_delete_anyway">Eliminar de todos modos</string>
+    <string name="delete_wallet_conversions_title">Conversión en curso</string>
+    <string name="delete_wallet_conversions_message">Una conversión de USD protegido sigue en curso. Restablecer ahora pierde los fondos que contiene. Deja que termine primero, o elimínala de todos modos.</string>
+    <string name="delete_wallet_conversions_review">Revisar conversión</string>
+    <string name="delete_wallet_conversions_delete_anyway">Eliminar de todos modos</string>
     <string name="delete_wallet_failed">Error al eliminar la billetera. Inténtalo nuevamente, por favor.</string>
 </resources>
