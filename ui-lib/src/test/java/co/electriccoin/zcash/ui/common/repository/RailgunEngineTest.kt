@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.common.repository
 import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
 import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
 import co.electriccoin.zcash.ui.common.security.AUTHENTICATE_TIMEOUT
+import co.electriccoin.zcash.ui.common.security.AppLock
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -60,7 +61,7 @@ class RailgunEngineTest {
             val engine = engine()
             val sync = syncInFlight(engine)
 
-            engine.onAppUnlocked(false)
+            engine.onAppLock(AppLock.LOCKED)
             advanceTimeBy(AUTHENTICATE_TIMEOUT)
             runCurrent()
 
@@ -75,9 +76,9 @@ class RailgunEngineTest {
             val engine = engine()
             val sync = syncInFlight(engine)
 
-            engine.onAppUnlocked(false)
+            engine.onAppLock(AppLock.LOCKED)
             advanceTimeBy(AUTHENTICATE_TIMEOUT - 1.minutes)
-            engine.onAppUnlocked(true)
+            engine.onAppLock(AppLock.UNLOCKED)
             advanceTimeBy(AUTHENTICATE_TIMEOUT)
             runCurrent()
 
@@ -91,7 +92,7 @@ class RailgunEngineTest {
         runTest {
             val engine = engine()
             syncInFlight(engine)
-            engine.onAppUnlocked(false)
+            engine.onAppLock(AppLock.LOCKED)
             advanceTimeBy(AUTHENTICATE_TIMEOUT)
             runCurrent()
             coVerify(exactly = 1) { wallet.close() }
@@ -102,7 +103,7 @@ class RailgunEngineTest {
             assertFalse(next.isCompleted)
             coVerify(exactly = 1) { wallet.open(any(), any(), any()) }
 
-            engine.onAppUnlocked(true)
+            engine.onAppLock(AppLock.UNLOCKED)
             assertEquals(FEES, next.await())
             coVerify(exactly = 2) { wallet.open(any(), any(), any()) }
         }
@@ -112,7 +113,7 @@ class RailgunEngineTest {
         runTest {
             val engine = engine()
             val sync = syncInFlight(engine)
-            engine.onAppUnlocked(false)
+            engine.onAppLock(AppLock.LOCKED)
 
             engine.reset()
             advanceTimeBy(AUTHENTICATE_TIMEOUT)
@@ -122,6 +123,51 @@ class RailgunEngineTest {
             coVerify(exactly = 1) { wallet.wipe() }
             coVerify(exactly = 0) { wallet.close() }
             assertFailsWith<IllegalStateException> { engine.withSession { it.fees } }
+        }
+
+    @Test
+    fun `the gate up closes the page at once, stopping the use in flight`() =
+        runTest {
+            val engine = engine()
+            val sync = syncInFlight(engine)
+
+            engine.onAppLock(AppLock.GATE_UP)
+            runCurrent()
+
+            assertTrue(sync.isCancelled)
+            coVerify(exactly = 1) { wallet.close() }
+            assertEquals(RailgunWalletState.Phase.IDLE, state.value.phase)
+        }
+
+    @Test
+    fun `the gate up with no page open calls nothing`() =
+        runTest {
+            val engine = engine()
+
+            engine.onAppLock(AppLock.GATE_UP)
+            runCurrent()
+
+            coVerify(exactly = 0) { wallet.close() }
+            coVerify(exactly = 0) { wallet.open(any(), any(), any()) }
+            assertEquals(RailgunWalletState.Phase.IDLE, state.value.phase)
+        }
+
+    @Test
+    fun `the gate up during the grace closes the page then, not once the grace ends`() =
+        runTest {
+            val engine = engine()
+            val sync = syncInFlight(engine)
+            engine.onAppLock(AppLock.LOCKED)
+            advanceTimeBy(AUTHENTICATE_TIMEOUT - 1.minutes)
+
+            engine.onAppLock(AppLock.GATE_UP)
+            runCurrent()
+            assertTrue(sync.isCancelled)
+            coVerify(exactly = 1) { wallet.close() }
+
+            advanceTimeBy(AUTHENTICATE_TIMEOUT)
+            runCurrent()
+            coVerify(exactly = 1) { wallet.close() }
         }
 
     // A sync the page is still answering, so no idle close is pending either.

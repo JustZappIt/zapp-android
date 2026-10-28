@@ -7,6 +7,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
 import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
+import co.electriccoin.zcash.ui.common.security.AppLock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,10 +67,10 @@ interface RailgunWalletRepository {
     suspend fun reset()
 
     /**
-     * Zapp came to the foreground unlocked ([isUnlocked]), or left it or locked. The page follows the lock: one that
-     * lasts as long as the authentication gate's timeout closes it, which drops the wallet's keys, until the unlock.
+     * Zapp's lock changed to [lock]. The page follows it: the authentication gate up closes it at once, and a lock in
+     * the background once it has lasted the gate's timeout, which drops the wallet's keys until the unlock.
      */
-    fun onAppUnlocked(isUnlocked: Boolean)
+    fun onAppLock(lock: AppLock)
 }
 
 /** Balances as a sync of the wallet at [address] found them, with the private sends it received. */
@@ -164,8 +165,8 @@ class RailgunWalletRepositoryImpl(
         engine?.reset()
     }
 
-    override fun onAppUnlocked(isUnlocked: Boolean) {
-        engine?.onAppUnlocked(isUnlocked)
+    override fun onAppLock(lock: AppLock) {
+        engine?.onAppLock(lock)
     }
 
     private suspend fun <T> withSession(block: suspend (RailgunSession) -> T): T {
