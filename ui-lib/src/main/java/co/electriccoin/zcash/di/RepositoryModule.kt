@@ -170,6 +170,7 @@ val repositoryModule =
                 deployments = get(),
                 http = get(named(ATOMIC_SWAP_HTTP)),
                 keys = get(),
+                notes = get(),
                 store = get(),
                 railgunWalletRepository = get(),
                 balanceRepository = lazy { get() },
