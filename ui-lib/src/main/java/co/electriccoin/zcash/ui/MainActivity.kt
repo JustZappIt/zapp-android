@@ -43,6 +43,7 @@ import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.provider.CHAT_CONVERSATION_ID_EXTRA
 import co.electriccoin.zcash.ui.common.push.ChatNotificationTiming
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationUIState
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationViewModel
 import co.electriccoin.zcash.ui.common.viewmodel.OldHomeViewModel
@@ -114,6 +115,7 @@ class MainActivity : FragmentActivity() {
     private val reverseSwapRepository: ReverseSwapRepository by inject()
     private val atomicSwapRepository: AtomicSwapRepository by inject()
     private val privateUsdDeposits: PrivateUsdDepositsRepository by inject()
+    private val railgunWallet: RailgunWalletRepository by inject()
 
     private val groupInvites: GroupInviteCoordinator by inject()
 
@@ -129,7 +131,7 @@ class MainActivity : FragmentActivity() {
 
         monitorForBackgroundSync()
 
-        watchDepositsWhileUnlocked()
+        watchShieldedUsdWhileUnlocked()
 
         forwardUriIntent(intent, resumeReclaim = true)
         forwardChatNotificationIntent(intent)
@@ -488,22 +490,28 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    // Shielded USD's deposit addresses are looked at only while Zapp is open and its lock is passed: a deposit under
-    // way waits meanwhile, safe at its address.
-    private fun watchDepositsWhileUnlocked() {
+    // Shielded USD follows Zapp's lock: its deposit addresses are looked at only while Zapp is open and its lock is
+    // passed (a deposit under way waits meanwhile, safe at its address), and its page closes for a lock that lasts as
+    // long as the authentication gate's timeout, which drops the wallet's keys.
+    private fun watchShieldedUsdWhileUnlocked() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 try {
                     authenticationViewModel.appAccessAuthenticationResultState.collect { state ->
-                        privateUsdDeposits.onAppUnlocked(
+                        onShieldedUsdUnlocked(
                             state == AuthenticationUIState.NotRequired || state == AuthenticationUIState.Successful
                         )
                     }
                 } finally {
-                    privateUsdDeposits.onAppUnlocked(false)
+                    onShieldedUsdUnlocked(false)
                 }
             }
         }
+    }
+
+    private fun onShieldedUsdUnlocked(isUnlocked: Boolean) {
+        privateUsdDeposits.onAppUnlocked(isUnlocked)
+        railgunWallet.onAppUnlocked(isUnlocked)
     }
 
     private fun monitorForBackgroundSync() {

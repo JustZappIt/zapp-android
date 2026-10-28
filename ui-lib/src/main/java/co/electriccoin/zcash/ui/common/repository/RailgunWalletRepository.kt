@@ -73,6 +73,12 @@ interface RailgunWalletRepository {
 
     /** Stops the engine and deletes what it stored, for a wallet about to be wiped. */
     suspend fun reset()
+
+    /**
+     * Zapp came to the foreground unlocked ([isUnlocked]), or left it or locked. The page follows the lock: one that
+     * lasts as long as the authentication gate's timeout closes it, which drops the wallet's keys, until the unlock.
+     */
+    fun onAppUnlocked(isUnlocked: Boolean)
 }
 
 /** Balances as a sync of the wallet at [address] found them, with the private sends it received. */
@@ -146,7 +152,13 @@ class RailgunWalletRepositoryImpl(
         transfer: RailgunTransfer,
         broadcaster: RailgunBroadcaster,
         fee: BigInteger
-    ): RailgunRelayedProof = proving { it.prove(transfer, broadcaster, fee) }
+    ): RailgunRelayedProof =
+        withSession { session ->
+            mutableState.update { it.copy(phase = RailgunWalletState.Phase.PROVING, proof = null) }
+            session.prove(transfer, broadcaster, fee).also {
+                mutableState.update { it.copy(phase = RailgunWalletState.Phase.READY) }
+            }
+        }
 
     override suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
         withSession { it.reverseCost(request) }
@@ -168,6 +180,10 @@ class RailgunWalletRepositoryImpl(
         engine?.reset()
     }
 
+    override fun onAppUnlocked(isUnlocked: Boolean) {
+        engine?.onAppUnlocked(isUnlocked)
+    }
+
     private suspend fun <T> withSession(
         alongside: Boolean = false,
         block: suspend (RailgunSession) -> T,
@@ -177,12 +193,6 @@ class RailgunWalletRepositoryImpl(
             if (alongside) engine.withSessionAlongside(block) else engine.withSession(block)
         }
     }
-
-    private suspend fun proving(prove: suspend (RailgunSession) -> RailgunRelayedProof) =
-        withSession { session ->
-            mutableState.update { it.copy(phase = RailgunWalletState.Phase.PROVING, proof = null) }
-            prove(session).also { mutableState.update { it.copy(phase = RailgunWalletState.Phase.READY) } }
-        }
 }
 
 private suspend fun MutableStateFlow<RailgunWalletState>.syncWith(session: RailgunSession): RailgunSync {
