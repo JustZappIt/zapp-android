@@ -20,7 +20,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
-import xyz.justzappit.evm.util.hexToBytes
 import java.math.BigInteger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -43,9 +42,6 @@ internal enum class RailgunMethod(
     // until it's done; a timeout closes the page, which starts it over.
     @SerialName("refresh")
     REFRESH(2.hours),
-
-    @SerialName("depositNote")
-    DEPOSIT_NOTE(1.minutes),
 
     @SerialName("transfer")
     TRANSFER(10.minutes),
@@ -121,22 +117,6 @@ internal data class WireReceivedSend(
             blockTime = timestamp?.takeIf { it > 0 }?.let(Instant::fromEpochSeconds),
             sender = sender?.let(RailgunAddress::parseOrNull),
         )
-}
-
-/** As `web/src/deposit-note.js` writes it, each word `0x` hex. Not a data class: a note never reaches a log. */
-@Serializable
-internal class WireDepositNote(
-    val npk: String,
-    val encryptedBundle: List<String>,
-    val shieldKey: String,
-) {
-    fun toNote(receiver: RailgunAddress): RailgunDepositNote =
-        try {
-            val bundle = encryptedBundle.map { it.hexToBytes() }
-            RailgunDepositNote(receiver, npk.hexToBytes(), bundle, shieldKey.hexToBytes())
-        } catch (e: IllegalArgumentException) {
-            throw RailgunException.Protocol("the page's deposit note isn't five 32-byte words", e)
-        }
 }
 
 @Serializable
