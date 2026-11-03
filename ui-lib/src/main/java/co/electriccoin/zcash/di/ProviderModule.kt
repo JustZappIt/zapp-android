@@ -219,6 +219,7 @@ val providerModule =
         singleOf(::PreferredP2pPaymentMethodProviderImpl) bind PreferredP2pPaymentMethodProvider::class
         single {
             SynchronizerProviderImpl(
+                context = get(),
                 walletCoordinator = get(),
                 persistableWalletProvider = get(),
                 // lazy {} breaks the AccountDataSource -> SynchronizerProvider resolution cycle
