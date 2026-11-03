@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.onramp.OnrampArgs
@@ -37,6 +38,7 @@ internal class ReputationVM(
     private val navigationRouter: NavigationRouter,
     private val accountProvider: SmartOfframpAccountProvider,
     private val reputationReader: ReputationReader,
+    private val navigateToSwap: NavigateToSwapUseCase,
 ) : ViewModel() {
     private val currency = args.currency
     private var loadJob: Job? = null
@@ -115,6 +117,7 @@ internal class ReputationVM(
                 } else {
                     ButtonState(text = stringRes(R.string.reputation_verify_to_buy), onClick = ::onRaiseLimit)
                 },
+            onSwapInstead = if (summary.canBuy) null else navigateToSwap::invoke,
         )
     }
 
@@ -123,25 +126,43 @@ internal class ReputationVM(
      * buy, reputation does not gate cashing out at all, and a second limit beside the one that is
      * blocking them invites the reading that both are. The info sheet says so in words instead.
      */
-    private fun content(summary: ReputationSummary) =
-        ReputationContent.Ready(
+    private fun content(summary: ReputationSummary): ReputationContent.Ready {
+        val firstUnlock = if (summary.canBuy) null else summary.bestSingleUnlock(currency)
+        return ReputationContent.Ready(
             points = summary.points.toString(),
             buyLimit =
-                if (summary.canBuy) {
-                    stringRes(R.string.reputation_amount_usd, summary.buyLimit.usd())
-                } else {
-                    stringRes(R.string.reputation_limit_locked)
+                when {
+                    summary.canBuy -> stringRes(R.string.reputation_amount_usd, summary.buyLimit.usd())
+
+                    // Locked: lead with what one verification unlocks, not with the wall.
+                    firstUnlock != null -> stringRes(R.string.reputation_limit_up_to, firstUnlock.usd())
+
+                    else -> stringRes(R.string.reputation_limit_locked)
                 },
             buyLimitCaption =
                 when {
-                    !summary.canBuy -> stringRes(R.string.reputation_limit_locked_caption)
-                    summary.isAtCeiling -> stringRes(R.string.reputation_limit_caption_at_ceiling)
-                    else -> stringRes(R.string.reputation_limit_caption)
+                    !summary.canBuy && firstUnlock != null -> {
+                        stringRes(R.string.reputation_limit_locked_unlock_caption, firstUnlock.usd())
+                    }
+
+                    !summary.canBuy -> {
+                        stringRes(R.string.reputation_limit_locked_caption)
+                    }
+
+                    summary.isAtCeiling -> {
+                        stringRes(R.string.reputation_limit_caption_at_ceiling)
+                    }
+
+                    else -> {
+                        stringRes(R.string.reputation_limit_caption)
+                    }
                 },
-            isLocked = !summary.canBuy,
+            // Dimmed only when the figure is the word "Locked"; a promise reads at full strength.
+            isLocked = !summary.canBuy && firstUnlock == null,
             // Listed in awards order, so the most valuable account is always first.
             verified = summary.verifiedRows(),
         )
+    }
 
     private fun ReputationSummary.verifiedRows(): List<PlatformRow> =
         SocialPlatform.entries.filter { it in verified }.map { platform ->
