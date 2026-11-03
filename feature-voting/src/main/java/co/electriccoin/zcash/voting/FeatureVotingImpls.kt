@@ -50,16 +50,14 @@ import org.json.JSONObject
  * the pending-session recovery in `HomeVM` bails out (via [VotingHomeHooks]), leaving the voting
  * UI unreachable even though its screens and routes remain registered.
  *
- * It is on. An earlier revision of this comment claimed SDK 3.1.0 drops the Slipstream sync
- * engine and that shipping voting therefore meant losing it; that was wrong. Slipstream moved
- * into its own `zcash-android-sdk-slipstream` artifact (the AGPL code leaving the MIT-published
- * one) and still reaches the app transitively through sdk-incubator. Both features ship together.
+ * It is off: the NU7 build of the SDK compiles shielded voting out, so every voting call throws.
+ * Slipstream is unaffected; it still reaches the app through sdk-incubator.
  *
  * Voting config falls back to a bundled pinned production URL
  * (`StaticVotingConfig.BUNDLED_PINNED_SOURCE`) when remote config's `voting_config_url` is unset,
  * so no remote config is required to try this.
  */
-const val VOTING_ENABLED = true
+const val VOTING_ENABLED = false
 
 class VotingHomeHooksImpl(
     private val votingRecoveryRepository: VotingRecoveryRepository,

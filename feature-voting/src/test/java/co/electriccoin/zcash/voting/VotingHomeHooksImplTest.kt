@@ -25,6 +25,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import org.junit.Assume.assumeTrue
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -65,6 +66,7 @@ class VotingHomeHooksImplTest {
     @Test
     fun recoverPendingRouteIfNeededRefreshesAndNavigatesWhenPendingRequestExists() =
         runTest {
+            assumeTrue(VOTING_ENABLED)
             val roundId = "abcd1234"
             val account = keystoneAccount()
             val accountUuid = account.sdkAccount.accountUuid.toVotingAccountScopeId()
@@ -124,6 +126,7 @@ class VotingHomeHooksImplTest {
     @Test
     fun recoverPendingRouteIfNeededIgnoresPendingRequestForRoundNoLongerActive() =
         runTest {
+            assumeTrue(VOTING_ENABLED)
             val roundId = "abcd1234"
             val account = keystoneAccount()
             val accountUuid = account.sdkAccount.accountUuid.toVotingAccountScopeId()
