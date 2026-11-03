@@ -13,9 +13,9 @@ zappMessaging=58f3cc72792d5efe663ebb4fd397f845dfcec2ac
 # Update both this SHA and the workflow ref when upgrading bare-kit.
 bare-kit=15a3569f3d704de7151761051c8d9cc2e299414f
 
-# The Zcash SDK is resolved from Maven snapshots (com.zodl.android, ZCASH_SDK_VERSION in
-# gradle.properties), not includeBuild. The SHA below is the release commit that snapshot was
-# published from: provenance, not something CI verifies.
+# The Zcash SDK is our NU7 build of 3.2.1 on librustzcash's final releases: CI builds it from
+# SDK_COMMIT_PIN in gradle.properties, and releases build it from a checkout of the same commit
+# through SDK_INCLUDED_BUILD_PATH. The published 3.2.1-SNAPSHOT can't sign after NU7 activates.
 #
 # v3.2.1 is the last MIT release. From v3.3.0 the SDK is AGPL-3.0-only and its
 # LICENSE-EXCEPTIONS.md grants no Google Play permission to anyone but Znewco, so moving past
@@ -25,9 +25,9 @@ bare-kit=15a3569f3d704de7151761051c8d9cc2e299414f
 # (63 slipstream paths in the tagged tree, IS_SLIPSTREAM_ENABLED=true). -SNAPSHOT is mutable,
 # so re-check both whenever this moves. See docs/voting.md.
 #
-# GitHub: https://github.com/zodl-inc/zodl-android-wallet-sdk (tag v3.2.1)
-zcashAndroidWalletSdk=2a496cc7c1513d6ab01e209163c0f7edd65408ab
+# GitHub: https://github.com/JustZappIt/zodl-android-wallet-sdk (branch feature/nu7-mainnet)
+zcashAndroidWalletSdk=61e4845e5ccbded42c18873969b5c7b754b1cab7
 
 # Atomic swap Kotlin wrapper and prebuilt Android native libraries.
 # GitHub: https://github.com/JustZappIt/zecSwap
-zecSwap=c45fd2c120fe41ad7385705a3e58ff206f225b5d
+zecSwap=8a5c642571ec730dcf0b0c2359484c2c71ae341d
