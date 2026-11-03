@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="ironwood_announcement_eyebrow">Network upgrade</string>
     <string name="ironwood_announcement_title">Zcash Upgraded to Ironwood</string>
     <string name="ironwood_announcement_body_1">Ironwood is a new shielded pool: the same protocol as Orchard, now formally verified and independently audited. Your funds are safe and your addresses still work.</string>
@@ -8,4 +8,6 @@
     <string name="ironwood_announcement_body_guide">Our guide covers what changed and how to move funds yourself instead.</string>
     <string name="ironwood_announcement_body_guide_link">Our guide</string>
     <string name="ironwood_announcement_primary_button">Go to Zapp</string>
+    <string name="ironwood_migration_paused_title" tools:ignore="MissingTranslation">Migration paused for the network upgrade</string>
+    <string name="ironwood_migration_paused_message" tools:ignore="MissingTranslation">A private migration started now would still be running when the Zcash network upgrade goes live, and its later transfers couldn\'t be sent. Start it once the upgrade has gone live, or move everything at once in a single transfer.</string>
 </resources>

@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
+import co.electriccoin.zcash.ui.common.model.LceContent
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.guardLoading
@@ -62,9 +63,9 @@ import java.math.BigDecimal
 import java.math.MathContext
 import co.electriccoin.zcash.ui.design.R as DesignR
 
-// Protocol target block interval in seconds, used as the fallback until a measured rate is
-// captured at propose time.
-private const val DEFAULT_SECONDS_PER_BLOCK = 75L
+// Protocol target block interval in seconds from NU7 (ZIP 218), used as the fallback until a
+// measured rate is captured at propose time.
+private const val DEFAULT_SECONDS_PER_BLOCK = 25L
 
 class MigrationReviewVM(
     private val args: MigrationReviewArgs,
@@ -199,8 +200,19 @@ class MigrationReviewVM(
             confirmLce.state
         ) { lce, rate, isKeystone, f, confirmState ->
             lce.success?.let { proposal -> createState(proposal, confirmState.loading, rate, isKeystone, f) }
-        }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapToState)
+        }.withLce(groupLce(proposeLce, confirmLce), ::mapError)
             .stateIn(this)
+
+    private fun mapError(error: LceContent.Error) =
+        if (error.cause.isMigrationPausedForNu7()) {
+            errorStateMapper.mapToState(
+                error,
+                title = stringRes(R.string.ironwood_migration_paused_title),
+                message = stringRes(R.string.ironwood_migration_paused_message),
+            )
+        } else {
+            errorStateMapper.mapToState(error)
+        }
 
     private fun createState(
         proposal: ReviewProposal,
@@ -595,3 +607,7 @@ class MigrationReviewVM(
         )
     }
 }
+
+// The SDK refuses a plan that would still be running at NU7 activation (MIGRATION_PAUSED_FOR_NU7_MARKER).
+private fun Throwable.isMigrationPausedForNu7() =
+    generateSequence(this) { it.cause }.any { it.message?.startsWith("MigrationPausedForNu7") == true }
