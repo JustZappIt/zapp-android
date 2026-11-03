@@ -149,6 +149,7 @@ val repositoryModule =
                 notifier = get(),
                 spendGuard = get(),
                 tokens = get(),
+                upgradePause = get(),
             )
         }
         single<PrivateUsdBalanceRepository> {

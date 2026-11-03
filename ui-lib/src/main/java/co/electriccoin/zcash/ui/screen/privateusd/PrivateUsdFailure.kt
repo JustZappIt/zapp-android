@@ -7,6 +7,7 @@ import androidx.annotation.StringRes
 import cash.z.ecc.android.sdk.exception.SdkException
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePauseException
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendBlockedException
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -51,6 +52,7 @@ internal enum class PrivateUsdFailure(
     TOR_OFF(R.string.convert_error_tor_off),
     BELOW_RELAYER_FEE(R.string.convert_error_below_fee),
     AMOUNT_REFUSED(R.string.convert_error_amount_refused),
+    UPGRADE_PAUSE(R.string.convert_error_upgrade_pause),
 
     /** Another conversion is under way: its screen is the place to be. */
     SWAP_UNDER_WAY(null),
@@ -64,6 +66,7 @@ internal enum class PrivateUsdFailure(
 internal fun Throwable.toFailure(): PrivateUsdFailure =
     when (this) {
         is ReverseRefundUnavailableException -> PrivateUsdFailure.REFUND_UNAVAILABLE
+        is SwapUpgradePauseException -> PrivateUsdFailure.UPGRADE_PAUSE
         is PrivateUsdSpendBlockedException -> PrivateUsdFailure.PAYMENT_PENDING
         is ZecInputQuoteException -> PrivateUsdFailure.NO_QUOTE_FITS
         is AtomicSwapBlockedException -> reason.toFailure()

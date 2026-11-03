@@ -147,6 +147,7 @@
     <string name="convert_error_tokens_unavailable" tools:ignore="MissingTranslation">Zapp couldn\'t get this conversion\'s token over Tor, so nothing was sent. Try again in a moment.</string>
     <string name="convert_error_device_refused">This phone can\'t get conversion tokens. The token issuer turns away emulators, phones with an unlocked bootloader or a modified system, and builds of Zapp it doesn\'t recognize.</string>
     <string name="convert_error_keystore">Zapp couldn\'t use this phone\'s secure key storage to get a conversion token, so nothing was sent. Try again in a moment.</string>
+    <string name="convert_error_upgrade_pause" tools:ignore="MissingTranslation">Conversions pause for the hour before the Zcash network upgrade. Try again once it has gone live.</string>
     <string name="convert_error_below_fee" tools:ignore="MissingTranslation">This amount doesn\'t cover the relayer\'s fee. Try a larger amount.</string>
     <string name="convert_error_amount_refused">The market maker won\'t convert this amount. It may be over the maker\'s limit for one conversion, or too small to cover the swap\'s network cost.</string>
     <string name="convert_error_tor_off" tools:ignore="MissingTranslation">Conversions get their token over Tor, which is off. Turn on Tor in Settings, then convert again.</string>

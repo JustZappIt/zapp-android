@@ -19,6 +19,7 @@ import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapZcashImpl
 import co.electriccoin.zcash.ui.common.atomicswap.SwapKeyring
 import co.electriccoin.zcash.ui.common.atomicswap.SwapTokenStoreImpl
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePause
 import co.electriccoin.zcash.ui.common.atomicswap.SwapZcashTransactions
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProvider
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProviderImpl
@@ -539,6 +540,7 @@ val providerModule =
         singleOf(::AtomicSwapZcashImpl) bind AtomicSwapZcash::class
         singleOf(::ReverseSwapZcashImpl) bind ReverseSwapZcash::class
         singleOf(::AtomicSwapZcashInfo)
+        singleOf(::SwapUpgradePause)
         singleOf(::AtomicSwapDeployments)
         single {
             AtomicSwapSessions(
