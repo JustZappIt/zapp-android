@@ -394,7 +394,7 @@ val useCaseModule =
         factoryOf(::ResetZashiUseCase)
         factoryOf(::EnsureNoUnsharedGiftFundsUseCase)
         // Its clock is a default, so no constructor reference: Koin would look the clock up.
-        factory { EnsureNoUnfinishedConversionsUseCase(get(), get(), get(), get()) }
+        factory { EnsureNoUnfinishedConversionsUseCase(get(), get(), get(), get(), get()) }
         factoryOf(::CheckGiftCardClaimedUseCase)
         factoryOf(::PreselectSwapAssetUseCase)
         singleOf(::RecoverFromSeedMismatchUseCase)

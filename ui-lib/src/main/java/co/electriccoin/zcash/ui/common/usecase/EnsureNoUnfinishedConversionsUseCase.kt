@@ -8,6 +8,8 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRecords
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRecords
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositStore
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import kotlinx.coroutines.CancellationException
 import xyz.justzappit.offramp.deposits.DepositRecord
 import kotlin.time.Clock
@@ -40,6 +42,7 @@ class EnsureNoUnfinishedConversionsUseCase(
     private val reverse: ReverseSwapRecords,
     private val deposits: PrivateUsdDepositStore,
     private val sends: PrivateUsdSendLog,
+    private val spendGuard: PrivateUsdSpendGuard,
     private val clock: Clock = Clock.System,
 ) {
     /** @throws UnfinishedConversionsException before the caller has touched anything. */
@@ -58,7 +61,17 @@ class EnsureNoUnfinishedConversionsUseCase(
                 read("The deposit store") { deposits.records().count { it.isUnfinished(now) } },
                 read("The send log") { sends.unsettledCount() },
             )
-        return counts.filterNotNull().takeIf { it.size == counts.size }?.sum()
+        // A conversion or send being committed right now has no record in those stores yet.
+        val committing =
+            when (spendGuard.state.value) {
+                PrivateUsdSpendStatus.SENDING, PrivateUsdSpendStatus.CONVERTING -> 1
+                else -> 0
+            }
+        return counts
+            .filterNotNull()
+            .takeIf { it.size == counts.size }
+            ?.sum()
+            ?.coerceAtLeast(committing)
     }
 }
 
