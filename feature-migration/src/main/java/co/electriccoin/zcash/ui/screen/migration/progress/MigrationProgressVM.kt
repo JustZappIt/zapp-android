@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationPreparation
@@ -247,6 +248,7 @@ class MigrationProgressVM(
                                 isAwaitingSignature = p.blocker == MigrationTransferBlocker.SIGNATURE,
                                 dependsOnNumbers = dependsOnNumbers,
                                 isDueNow = p.scheduledAt <= now,
+                                isHeldForUpgrade = p.blocker == MigrationTransferBlocker.UPGRADE_HOLD,
                             ),
                         isDone = p.isSent,
                     )
@@ -424,6 +426,10 @@ internal fun transferRowDisplay(
             MigrationRowDisplay(stringRes("Awaiting signature"), isReadyNow = false)
         }
 
+        t.blocker == MigrationTransferBlocker.UPGRADE_HOLD -> {
+            MigrationRowDisplay(stringRes(R.string.ironwood_migration_row_held), isReadyNow = false)
+        }
+
         t.isSent -> {
             sentRowDisplay(t.minedAt, now, fineGrained)
         }
@@ -461,6 +467,10 @@ internal fun preparationRowDisplay(
 
         p.blocker == MigrationTransferBlocker.DEPENDENCIES -> {
             MigrationRowDisplay(stringRes("Waiting for previous split"), isReadyNow = false)
+        }
+
+        p.blocker == MigrationTransferBlocker.UPGRADE_HOLD -> {
+            MigrationRowDisplay(stringRes(R.string.ironwood_migration_row_held), isReadyNow = false)
         }
 
         p.scheduledAt <= now -> {

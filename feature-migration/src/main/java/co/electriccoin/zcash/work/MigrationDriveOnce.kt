@@ -359,6 +359,10 @@ class MigrationDriveOnce(
                     // wait above, and it may no longer report Broadcast at all (something changed),
                     // or name a different transaction than the one that triggered this run.
                     val freshStep = sdk.nextStep()?.step
+                    if (freshStep == MigrationAdvanceStep.Replan) {
+                        replanRun(sdk, accountKeyId)
+                        return DriveOnceResult.Terminal
+                    }
                     if (freshStep !is MigrationAdvanceStep.Broadcast) {
                         migrationLog(
                             "MigrationDriveOnce: after the wait, engine no longer reports Broadcast " +
@@ -693,7 +697,10 @@ class MigrationDriveOnce(
     ): Duration {
         val states = sdk.getMigrationTransferStates()
         val est = sdk.estimatedChainTip()
-        val peek = sdk.nextStep()?.next
+        val next = sdk.nextStep()
+        // The read that names a Replan also supersedes the plan, so no later one will name it.
+        if (next?.step == MigrationAdvanceStep.Replan) replanRun(sdk, accountKeyId)
+        val peek = next?.next
         val delay =
             nextWake(
                 states,
@@ -896,6 +903,7 @@ internal fun broadcastDueByEstimate(states: MigrationTransferStates, estimatedTi
         !it.isSent &&
             it.isProved &&
             it.blocker != MigrationBlocker.UNPROVABLE_ANCHOR &&
+            it.blocker != MigrationBlocker.UPGRADE_HOLD &&
             it.scheduledHeight <= estimatedTip
     }
 }

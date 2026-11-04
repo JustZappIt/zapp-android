@@ -16,6 +16,7 @@ fun ErrorMapperUseCase.mapMigrationError(error: LceContent.Error) =
             error,
             title = stringRes(R.string.ironwood_migration_paused_title),
             message = stringRes(R.string.ironwood_migration_paused_message),
+            isReportable = false,
         )
     } else {
         mapToState(error)

@@ -376,6 +376,37 @@ class MigrationBannerStateTest {
         assertEquals(MigrationHomeMessageData(isRunActive = false, completedCount = 1, totalCount = 2), result)
     }
 
+    @Test
+    fun readyToSendDoesNotFireForATransactionHeldForTheUpgrade() {
+        val progress = MigrationProgress(completedTransfers = 0, totalTransfers = 2, nextTransferReadyAtHeight = null)
+        val heldSnapshot =
+            snapshot().copy(
+                transfers =
+                    snapshot().transfers.map {
+                        if (it.isSent) {
+                            it
+                        } else {
+                            it.copy(
+                                blocker = MigrationTransferBlocker.UPGRADE_HOLD,
+                                scheduledAt = kotlin.time.Instant.fromEpochSeconds(0),
+                            )
+                        }
+                    },
+            )
+
+        val result =
+            migrationMessageFor(
+                sdkState = MigrationState.InProgress(progress),
+                snapshot = heldSnapshot,
+                hasSeenComplete = false,
+                orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 1_000_000L,
+                isBackgroundExecutionAvailable = false,
+                hasOverdueTransfers = false,
+            )
+
+        assertEquals(false, result?.isReadyToSend)
+    }
+
     // --- RESIDUE gated on isFullySynced (mid-sync staleness) ---
 
     /**

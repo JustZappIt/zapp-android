@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.model.migration
 
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 
@@ -78,6 +79,7 @@ fun preparationStepStatus(
     isAwaitingSignature: Boolean,
     dependsOnNumbers: List<Int>,
     isDueNow: Boolean,
+    isHeldForUpgrade: Boolean = false,
 ): StringResource =
     when {
         isSent -> {
@@ -86,6 +88,10 @@ fun preparationStepStatus(
 
         isAwaitingSignature -> {
             stringRes("Awaiting signature")
+        }
+
+        isHeldForUpgrade -> {
+            stringRes(R.string.ironwood_migration_row_held)
         }
 
         dependsOnNumbers.isNotEmpty() -> {

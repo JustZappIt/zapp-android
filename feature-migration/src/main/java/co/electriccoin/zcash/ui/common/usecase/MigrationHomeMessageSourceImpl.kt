@@ -328,6 +328,7 @@ internal fun migrationMessageFor(
             next != null &&
             !isBackgroundExecutionAvailable &&
             !hasOverdueTransfers &&
+            next.blocker != MigrationTransferBlocker.UPGRADE_HOLD &&
             next.scheduledAt <= now -> {
             MigrationHomeMessageData(
                 isRunActive = true,

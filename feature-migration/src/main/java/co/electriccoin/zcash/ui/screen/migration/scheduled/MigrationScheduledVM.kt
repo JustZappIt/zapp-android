@@ -84,6 +84,14 @@ class MigrationScheduledVM(
                 return
             }
             val sdk = getOrchardMigrationSdk()
+            // Kind-agnostic per-id signature application — extra PREPARATIONS of the note-split
+            // tree go through the same call as the transfers. Before the split goes out: this batch
+            // lives in memory, and dying after the split would otherwise lose every other signature
+            // with no way back to them, the split no longer being there to sign.
+            sdk.storeSignedSchedulePczts(
+                (pending.accumulatedPrepSigned + pending.accumulatedTransferSigned)
+                    .map { (id, bytes) -> id to Pczt(bytes) }
+            )
             val splitSignedPczt = pending.accumulatedSplitSigned
             if (splitSignedPczt != null) {
                 val useTor = isMigrationTorEnabledStorageProvider.get()
@@ -105,6 +113,8 @@ class MigrationScheduledVM(
                     }
                     return
                 }
+                // A retry of what follows doesn't send it again.
+                pendingKeystonePczts.set(accountKeyId, pending.copy(accumulatedSplitSigned = null))
                 // Classify zip318_kind (PREPARATION) immediately — this broadcast's raw bytes are
                 // already stored locally, so without this the normal enhancement queue would skip
                 // it forever and the Activity row would stay "Sent" instead of "Note
@@ -112,12 +122,6 @@ class MigrationScheduledVM(
                 // transfers.
                 synchronizerProvider.getSynchronizerOrNull()?.enhanceTransaction(splitResult.txId)
             }
-            // Kind-agnostic per-id signature application — extra PREPARATIONS of the note-split
-            // tree go through the same call as the transfers.
-            sdk.storeSignedSchedulePczts(
-                (pending.accumulatedPrepSigned + pending.accumulatedTransferSigned)
-                    .map { (id, bytes) -> id to Pczt(bytes) }
-            )
             migrationLog(
                 "MigrationScheduled: stored ${pending.accumulatedPrepSigned.size} signed prep + " +
                     "${pending.accumulatedTransferSigned.size} signed transfer PCZT(s) " +
