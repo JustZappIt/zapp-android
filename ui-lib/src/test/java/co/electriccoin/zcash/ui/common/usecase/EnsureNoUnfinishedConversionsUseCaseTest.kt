@@ -7,11 +7,15 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRecords
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRecords
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositStore
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.depositRecord
 import co.electriccoin.zcash.ui.screen.privateusd.toUsd
 import co.electriccoin.zcash.ui.screen.privateusd.toZec
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
@@ -129,6 +133,7 @@ class EnsureNoUnfinishedConversionsUseCaseTest {
                     reverse = mockk { coEvery { active() } returns null },
                     deposits = mockk { coEvery { records() } returns emptyList() },
                     sends = mockk { coEvery { unsettledCount() } returns 0 },
+                    spendGuard = guard(),
                     clock = FIXED_CLOCK,
                 )
 
@@ -137,18 +142,34 @@ class EnsureNoUnfinishedConversionsUseCaseTest {
             assertNull(blocked.count)
         }
 
+    @Test
+    fun `a conversion being committed, with no record yet, blocks`() =
+        runTest {
+            val blocked =
+                assertFailsWith<UnfinishedConversionsException> {
+                    gate(spending = PrivateUsdSpendStatus.CONVERTING)()
+                }
+
+            assertEquals(1, blocked.count)
+        }
+
     private fun gate(
         forward: AtomicSwapRecord? = null,
         reverse: ReverseSwapRecord? = null,
         deposits: List<DepositRecord> = emptyList(),
         unsettledSends: Int = 0,
+        spending: PrivateUsdSpendStatus = PrivateUsdSpendStatus.AVAILABLE,
     ) = EnsureNoUnfinishedConversionsUseCase(
         forward = mockk<AtomicSwapRecords> { coEvery { active() } returns forward },
         reverse = mockk<ReverseSwapRecords> { coEvery { active() } returns reverse },
         deposits = mockk<PrivateUsdDepositStore> { coEvery { records() } returns deposits },
         sends = mockk<PrivateUsdSendLog> { coEvery { unsettledCount() } returns unsettledSends },
+        spendGuard = guard(spending),
         clock = FIXED_CLOCK,
     )
+
+    private fun guard(spending: PrivateUsdSpendStatus = PrivateUsdSpendStatus.AVAILABLE) =
+        mockk<PrivateUsdSpendGuard> { every { state } returns MutableStateFlow(spending) }
 
     private companion object {
         const val NOW = 1_792_800_000L

@@ -161,6 +161,33 @@ class ResetZashiUseCaseTest {
         }
 
     @Test
+    fun `steps that wait on an account or a partner do not hold up the seed`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            coEvery { fixture.migrationAppHooks.cancelMigrationWork(any()) } coAnswers { awaitCancellation() }
+            coEvery { fixture.flexaRepository.disconnect() } throws IllegalStateException("flexa")
+            coEvery { fixture.synchronizerProvider.getSynchronizer() } coAnswers { awaitCancellation() }
+
+            assertEquals(ResetZashiResult.WIPED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
+    @Test
+    fun `a conversion that starts during the prompt stops the wipe`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            coEvery { fixture.biometricRepository.requestBiometrics(any()) } coAnswers {
+                coEvery { fixture.ensureNoUnfinishedConversions() } throws UnfinishedConversionsException(count = 1)
+            }
+
+            assertFailsWith<UnfinishedConversionsException> { fixture.useCase(keepFiles = true) }
+
+            coVerify(exactly = 0) { fixture.atomicSwapRepository.reset() }
+            coVerify(exactly = 0) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
+    @Test
     fun `a teardown that fails does not hold up the seed`() =
         runTest {
             val fixture = Fixture(hasUnsharedFunds = false)
@@ -243,8 +270,10 @@ class ResetZashiUseCaseTest {
         val selectedTabRepository = SelectedTabRepository()
 
         val giftCardStorageProvider = mockk<GiftCardStorageProvider>()
-        private val ensureNoUnfinishedConversions = mockk<EnsureNoUnfinishedConversionsUseCase>()
-        private val synchronizerProvider = mockk<SynchronizerProvider>()
+        val ensureNoUnfinishedConversions = mockk<EnsureNoUnfinishedConversionsUseCase>()
+        val synchronizerProvider = mockk<SynchronizerProvider>()
+        val migrationAppHooks = mockk<MigrationAppHooks>(relaxed = true)
+        val flexaRepository = mockk<FlexaRepository>(relaxed = true)
         private val standardPreferenceProvider = mockk<StandardPreferenceProvider>()
         private val encryptedPreferenceProvider = mockk<EncryptedPreferenceProvider>()
 
@@ -272,7 +301,7 @@ class ResetZashiUseCaseTest {
             useCase =
                 ResetZashiUseCase(
                     walletCoordinator = walletCoordinator,
-                    flexaRepository = mockk<FlexaRepository>(relaxed = true),
+                    flexaRepository = flexaRepository,
                     synchronizerProvider = synchronizerProvider,
                     standardPreferenceProvider = standardPreferenceProvider,
                     encryptedPreferenceProvider = encryptedPreferenceProvider,
@@ -283,7 +312,7 @@ class ResetZashiUseCaseTest {
                     chatBlockedKeysStorageProvider = mockk<ChatBlockedKeysStorageProvider>(relaxed = true),
                     peerCashOutRepository = mockk<PeerCashOutRepository>(relaxed = true),
                     baseBalanceRepository = mockk<BaseBalanceRepository>(relaxed = true),
-                    migrationAppHooks = mockk<MigrationAppHooks>(relaxed = true),
+                    migrationAppHooks = migrationAppHooks,
                     ensureNoUnsharedGiftFunds =
                         EnsureNoUnsharedGiftFundsUseCase(
                             giftCardStorageProvider,

@@ -73,9 +73,9 @@ class ResetZashiUseCase internal constructor(
      * @param beforeWipe A caller's own teardown, run once the user has authenticated and before the first
      * irreversible step, so a cancelled prompt leaves it undone.
      * @throws co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException before anything is touched,
-     * unless [allowGiftDataLoss].
+     * unless [allowGiftDataLoss]. It can come after the prompt too.
      * @throws co.electriccoin.zcash.ui.common.usecase.UnfinishedConversionsException before anything is touched,
-     * unless [allowConversionLoss].
+     * unless [allowConversionLoss]. It can come after the prompt too.
      */
     suspend operator fun invoke(
         keepFiles: Boolean,
@@ -85,15 +85,24 @@ class ResetZashiUseCase internal constructor(
     ): ResetZashiResult {
         // clearSharedPrefs() wipes gift_cards_v1, and an unshared card's ephemeral seed lives nowhere else; the
         // records carrying a conversion to its end live there too. Refuse before anything is touched.
-        if (!allowGiftDataLoss) ensureNoUnsharedGiftFunds()
-        if (!allowConversionLoss) ensureNoUnfinishedConversions()
+        refuseWhatWouldBeLost(allowGiftDataLoss, allowConversionLoss)
         if (!requestBiometrics()) return ResetZashiResult.NOT_AUTHENTICATED
+        // The prompt stays up for as long as the user leaves it, and something may have started behind it.
+        refuseWhatWouldBeLost(allowGiftDataLoss, allowConversionLoss)
         // A scope cancelled from here on (the screen left, the process trimmed) must not leave half a wallet.
         withContext(NonCancellable) {
-            beforeWipe()
+            bounded("the caller's teardown") { beforeWipe() }
             wipe(keepFiles)
         }
         return ResetZashiResult.WIPED
+    }
+
+    private suspend fun refuseWhatWouldBeLost(
+        allowGiftDataLoss: Boolean,
+        allowConversionLoss: Boolean,
+    ) {
+        if (!allowGiftDataLoss) ensureNoUnsharedGiftFunds()
+        if (!allowConversionLoss) ensureNoUnfinishedConversions()
     }
 
     /** True once the user passed the prompt; false when they cancelled it or it failed, which wipes nothing. */
@@ -119,13 +128,14 @@ class ResetZashiUseCase internal constructor(
         // Migration workers are self-rechaining OneTimeWork — a wallet wipe that leaves them
         // scheduled produces zombie retries against a wallet that no longer exists (Milan,
         // 2026-07-30). Cancel while the accounts are still resolvable.
-        migrationAppHooks.cancelMigrationWork()
-        flexaRepository.disconnect()
+        // It waits for the accounts, which never come without a synchronizer; its tag sweep runs regardless.
+        bounded("the migration work") { migrationAppHooks.cancelMigrationWork() }
+        bounded("Flexa") { flexaRepository.disconnect() }
         // App-scoped and wallet-specific. Joining before anything is wiped is the point: an
         // attempt still running would write its checkpoint back into storage this is about to
         // clear, and would keep driving the deleted wallet's smart account.
         bounded("the cash-out attempt") { peerCashOutRepository.reset() }
-        baseBalanceRepository.reset()
+        bounded("the Base balance") { baseBalanceRepository.reset() }
         // Conversions too: a loop still running would write the wiped wallet's swap back.
         bounded("the conversion into USD") { atomicSwapRepository.reset() }
         bounded("the conversion into ZEC") { reverseSwapRepository.reset() }
@@ -134,8 +144,8 @@ class ResetZashiUseCase internal constructor(
         bounded("Private USD's sends") { privateUsdSenders.current?.reset() }
         bounded("Private USD's deposits") { privateUsdDeposits.reset() }
         bounded("the Railgun engine") { railgunWalletRepository.reset() }
-        deleteLocalFiles(keepFiles)
-        closeSynchronizer()
+        bounded("the local files") { deleteLocalFiles(keepFiles) }
+        bounded("the synchronizer", CLOSE_SYNCHRONIZER_TIMEOUT) { closeSynchronizer() }
         clearSDK()
         clearSharedPrefs()
         clearInMemoryData()
@@ -165,15 +175,12 @@ class ResetZashiUseCase internal constructor(
     }
 
     /**
-     * Waits for a synchronizer to close, bounded by [CLOSE_SYNCHRONIZER_TIMEOUT]. A latched seed
-     * mismatch ([WalletCoordinator.isSeedMismatch]) keeps [SynchronizerProvider.getSynchronizer]'s
-     * underlying flow null forever, which would otherwise hang this step indefinitely after
-     * [deleteLocalFiles] already ran. When no synchronizer materializes in time, this is a no-op —
-     * [clearSDK]'s lockout-aware erase still handles teardown of any lingering SDK state.
+     * Waits for a synchronizer and closes it. A latched seed mismatch ([WalletCoordinator.isSeedMismatch]) keeps
+     * [SynchronizerProvider.getSynchronizer]'s underlying flow null forever, so the caller bounds this. When none
+     * materializes in time, [clearSDK]'s lockout-aware erase still handles teardown of any lingering SDK state.
      */
     private suspend fun closeSynchronizer() {
-        withTimeoutOrNull(CLOSE_SYNCHRONIZER_TIMEOUT) { synchronizerProvider.getSynchronizer() }
-            ?.let { (it as CloseableSynchronizer).closeQuietly() }
+        (synchronizerProvider.getSynchronizer() as CloseableSynchronizer).closeQuietly()
     }
 
     private fun deleteLocalFiles(keepFiles: Boolean) {

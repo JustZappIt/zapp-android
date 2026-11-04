@@ -12,6 +12,8 @@ import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnfinishedConversionsUseCase
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.UnfinishedConversionsException
+import co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ButtonStyle
 import co.electriccoin.zcash.ui.design.component.CheckboxState
@@ -182,14 +184,21 @@ class ResetZashiVM(
         reset(allowConversionLoss = true)
     }
 
-    // A cancelled prompt ends the loading state and nothing else, as before; the result is not shown.
+    // A cancelled prompt ends the loading state and nothing else, as before; the result is not shown. A refusal here
+    // means something started behind the prompt, and gets the dialog it would have got before it.
     private fun reset(allowConversionLoss: Boolean) {
         resetLce.execute {
-            resetZashi(
-                keepFiles = isKeepFilesChecked.value,
-                allowGiftDataLoss = isGiftLossAccepted,
-                allowConversionLoss = allowConversionLoss,
-            )
+            try {
+                resetZashi(
+                    keepFiles = isKeepFilesChecked.value,
+                    allowGiftDataLoss = isGiftLossAccepted,
+                    allowConversionLoss = allowConversionLoss,
+                )
+            } catch (_: UnsharedGiftFundsException) {
+                confirmationDialogFlow.value = createGiftFundsWarningState()
+            } catch (_: UnfinishedConversionsException) {
+                confirmationDialogFlow.value = createConversionsWarningState()
+            }
         }
     }
 }
