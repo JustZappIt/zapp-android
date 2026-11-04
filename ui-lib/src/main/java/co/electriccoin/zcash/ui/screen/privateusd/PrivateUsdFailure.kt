@@ -98,14 +98,20 @@ private fun AtomicSwapService.toFailure() =
         AtomicSwapService.RELAYER -> PrivateUsdFailure.RELAYER_UNREACHABLE
     }
 
-// Rejected: out of range or under the swap's network cost. Unavailable: more than the maker holds, or a stale price.
+// Rejected: out of range or under the swap's network cost. Unavailable names the amount only in the maker's own words:
+// a stale price says otherwise, and so does the gateway when it can't reach the maker at all.
 private fun AtomicSwapHttpException.Refused.refusal() =
     when {
         service == AtomicSwapService.RELAYER -> PrivateUsdFailure.RELAYER_REFUSED
         code == SwapErrorCode.REJECTED -> PrivateUsdFailure.AMOUNT_REFUSED
-        code == SwapErrorCode.UNAVAILABLE -> PrivateUsdFailure.MAKER_CANT_FILL
+        cantFillAmount -> PrivateUsdFailure.MAKER_CANT_FILL
         else -> service.toFailure()
     }
+
+private val AtomicSwapHttpException.Refused.cantFillAmount: Boolean
+    get() = code == SwapErrorCode.UNAVAILABLE && message.orEmpty().contains(MAKER_CANT_FILL_REASON)
+
+private const val MAKER_CANT_FILL_REASON = "cannot fill that amount"
 
 private fun AtomicSwapBlock.toFailure() =
     when (this) {

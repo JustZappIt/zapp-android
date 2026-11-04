@@ -386,8 +386,18 @@ class PrivateUsdConvertVMTest {
                         R.string.convert_error_relayer_refused,
                     AtomicSwapHttpException.Unreachable(AtomicSwapService.MAKER, IOException("down")) to
                         R.string.convert_error_maker,
-                    AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 503, SwapErrorCode.UNAVAILABLE, "short") to
-                        R.string.convert_error_maker_cant_fill,
+                    AtomicSwapHttpException.Refused(
+                        AtomicSwapService.MAKER,
+                        503,
+                        SwapErrorCode.UNAVAILABLE,
+                        "cannot fill that amount right now",
+                    ) to R.string.convert_error_maker_cant_fill,
+                    AtomicSwapHttpException.Refused(
+                        AtomicSwapService.MAKER,
+                        503,
+                        SwapErrorCode.UNAVAILABLE,
+                        "swap service is temporarily unavailable",
+                    ) to R.string.convert_error_maker,
                     AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 400, SwapErrorCode.REJECTED, "range") to
                         R.string.convert_error_amount_refused,
                     AtomicSwapBlockedException(AtomicSwapBlock.AMOUNT_UNQUOTABLE, "more than a quote can name") to
