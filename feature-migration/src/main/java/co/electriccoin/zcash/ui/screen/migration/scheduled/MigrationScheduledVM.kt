@@ -8,11 +8,13 @@ import cash.z.ecc.android.sdk.model.Pczt
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
+import co.electriccoin.zcash.ui.common.model.migration.isMigrationPausedForNu7
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
@@ -144,7 +146,12 @@ class MigrationScheduledVM(
             migrationLog("MigrationScheduled: finalizeIfPendingKeystoneBatch failed: $e")
             failureSheet.update {
                 MigrationTransferFailureState(
-                    message = stringRes(DesignR.string.migrationScheduled_finalizeErrorMessage),
+                    message =
+                        if (e.isMigrationPausedForNu7()) {
+                            stringRes(R.string.ironwood_migration_paused_message)
+                        } else {
+                            stringRes(DesignR.string.migrationScheduled_finalizeErrorMessage)
+                        },
                     onRetry = {
                         failureSheet.value = null
                         viewModelScope.launch { finalizeIfPendingKeystoneBatch() }

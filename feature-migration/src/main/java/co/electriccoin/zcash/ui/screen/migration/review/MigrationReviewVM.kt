@@ -13,7 +13,6 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
-import co.electriccoin.zcash.ui.common.model.LceContent
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.guardLoading
@@ -24,6 +23,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationStepD
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
+import co.electriccoin.zcash.ui.common.model.migration.mapMigrationError
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.migration.preparationStepStatus
 import co.electriccoin.zcash.ui.common.model.migration.preparationStepTimeLabel
@@ -101,7 +101,7 @@ class MigrationReviewVM(
         ) : ReviewProposal()
     }
 
-    // Measured block rate captured at propose time; 75s until then. Drives every
+    // Measured block rate captured at propose time; the NU7 target until then. Drives every
     // height-to-time label on this screen (bursty testnet vs the protocol constant).
     @Volatile
     private var secondsPerBlock: Long = DEFAULT_SECONDS_PER_BLOCK
@@ -200,19 +200,8 @@ class MigrationReviewVM(
             confirmLce.state
         ) { lce, rate, isKeystone, f, confirmState ->
             lce.success?.let { proposal -> createState(proposal, confirmState.loading, rate, isKeystone, f) }
-        }.withLce(groupLce(proposeLce, confirmLce), ::mapError)
+        }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapMigrationError)
             .stateIn(this)
-
-    private fun mapError(error: LceContent.Error) =
-        if (error.cause.isMigrationPausedForNu7()) {
-            errorStateMapper.mapToState(
-                error,
-                title = stringRes(R.string.ironwood_migration_paused_title),
-                message = stringRes(R.string.ironwood_migration_paused_message),
-            )
-        } else {
-            errorStateMapper.mapToState(error)
-        }
 
     private fun createState(
         proposal: ReviewProposal,
@@ -607,7 +596,3 @@ class MigrationReviewVM(
         )
     }
 }
-
-// The SDK refuses a plan that would still be running at NU7 activation (MIGRATION_PAUSED_FOR_NU7_MARKER).
-private fun Throwable.isMigrationPausedForNu7() =
-    generateSequence(this) { it.cause }.any { it.message?.startsWith("MigrationPausedForNu7") == true }
