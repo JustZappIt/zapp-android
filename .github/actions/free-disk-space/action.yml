@@ -25,7 +25,7 @@ runs:
           /usr/share/swift
 
         if [ -d /usr/local/lib/android/sdk/ndk ]; then
-          find /usr/local/lib/android/sdk/ndk -mindepth 1 -maxdepth 1 ! -name "27.0.12077973" -exec sudo rm -rf {} +
+          find /usr/local/lib/android/sdk/ndk -mindepth 1 -maxdepth 1 ! -name "27.0.12077973" ! -name "28.2.13676358" -exec sudo rm -rf {} +
         fi
 
         sudo docker image prune --all --force || true

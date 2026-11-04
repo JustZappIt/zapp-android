@@ -25,12 +25,14 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import java.lang.reflect.Proxy
 import java.util.concurrent.atomic.AtomicInteger
@@ -826,6 +828,7 @@ class KtorVotingApiProviderTest {
         runBlocking {
             val inFlight = AtomicInteger(0)
             val maxObserved = AtomicInteger(0)
+            val capReached = CompletableDeferred<Unit>()
             val provider =
                 KtorVotingApiProvider(
                     httpClientProvider =
@@ -857,6 +860,10 @@ class KtorVotingApiProviderTest {
                                             "/shielded-vote/v1/shares" -> {
                                                 val current = inFlight.incrementAndGet()
                                                 maxObserved.updateAndGet { max -> maxOf(max, current) }
+                                                // Held until the cap's worth are in, however slowly a loaded
+                                                // machine starts them. A lower cap never gets there.
+                                                if (current >= SEMAPHORE_CAP) capReached.complete(Unit)
+                                                withTimeoutOrNull(SEMAPHORE_TEST_WAIT_MILLIS) { capReached.await() }
                                                 delay(SEMAPHORE_TEST_HOLD_MILLIS)
                                                 inFlight.decrementAndGet()
                                                 respond(
@@ -1340,6 +1347,7 @@ class KtorVotingApiProviderTest {
         const val SEMAPHORE_CAP = 16
         const val SHARE_COUNT_ABOVE_SEMAPHORE_CAP = 20
         const val SEMAPHORE_TEST_HOLD_MILLIS = 40L
+        const val SEMAPHORE_TEST_WAIT_MILLIS = 10_000L
         val TEST_CHAIN_CONFIG_STATE =
             VotingChainConfigState(
                 selected = VotingChainConfigSelection.Custom("test-chain"),

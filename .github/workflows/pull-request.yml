@@ -714,6 +714,12 @@ jobs:
           verify_sha zappMessaging ../zappMessaging
           verify_sha bare-kit ../bare-kit
           verify_sha zecSwap ../zecSwap
+          sdk_dep=$(grep '^zcashAndroidWalletSdk=' .zapp-deps | cut -d= -f2)
+          sdk_pin=$(grep '^SDK_COMMIT_PIN=' gradle.properties | cut -d= -f2)
+          if [ -n "$sdk_pin" ] && [ "$sdk_dep" != "$sdk_pin" ]; then
+            echo "::error::SDK pin mismatch: .zapp-deps has ${sdk_dep}, gradle.properties has ${sdk_pin}"
+            exit 1
+          fi
       - name: Set up bare-kit npm dependencies
         uses: ./zapp-android/.github/actions/setup-bare-kit
         timeout-minutes: 10
