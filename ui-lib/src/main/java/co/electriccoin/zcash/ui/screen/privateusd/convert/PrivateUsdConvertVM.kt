@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePause
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.WalletSnapshotDataSource
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
@@ -72,6 +73,7 @@ class PrivateUsdConvertVM(
     private val balanceRepository: PrivateUsdBalanceRepository,
     observeLocalCurrency: ObserveLocalCurrencyUseCase,
     private val spendGuard: PrivateUsdSpendGuard,
+    private val upgradePause: SwapUpgradePause,
 ) : ViewModel() {
     private val deployment = atomicSwapRepository.requireDeployment()
     private val terms = PrivateUsdConvertTerms(deployment)
@@ -317,6 +319,7 @@ class PrivateUsdConvertVM(
     private suspend fun start(offer: AtomicSwapOffer): StringResource? {
         val step =
             runConversionStep("the conversion didn't start") {
+                upgradePause.requireOpen()
                 secretAuthGate.authenticateSpend().also { if (it) atomicSwapRepository.accept(offer) }
             }
         if (step.getOrNull() == true) navigationRouter.replace(PrivateUsdProgressArgs)

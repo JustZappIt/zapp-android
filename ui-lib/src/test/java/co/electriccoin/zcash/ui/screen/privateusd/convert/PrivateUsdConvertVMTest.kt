@@ -551,6 +551,7 @@ class PrivateUsdConvertVMTest {
                     },
                 balanceRepository = balances,
                 observeLocalCurrency = localCurrency,
+                upgradePause = mockk(relaxed = true),
             )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
     }
