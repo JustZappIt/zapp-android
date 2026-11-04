@@ -1,8 +1,10 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.screen.chat.common.runChatCall
 import co.electriccoin.zcash.ui.screen.deletewallet.ResetZashiResult
 import co.electriccoin.zcash.ui.screen.deletewallet.ResetZashiUseCase
+import kotlinx.coroutines.flow.StateFlow
 import xyz.justzappit.zappmessaging.ZappMessagingSDK
 
 /**
@@ -14,6 +16,8 @@ class DeleteChatIdentityUseCase(
     private val sdk: ZappMessagingSDK,
     private val resetZashi: ResetZashiUseCase,
 ) {
+    val pinPrompt: StateFlow<PinVerifyState?> get() = resetZashi.pinPrompt
+
     /**
      * @throws UnsharedGiftFundsException before anything is touched, unless [allowGiftDataLoss].
      * @throws UnfinishedConversionsException before anything is touched, unless [allowConversionLoss].

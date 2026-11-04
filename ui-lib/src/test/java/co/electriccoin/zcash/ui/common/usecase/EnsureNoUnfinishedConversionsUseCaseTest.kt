@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRecords
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRecords
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositStore
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
@@ -13,9 +14,13 @@ import co.electriccoin.zcash.ui.common.privateusd.depositRecord
 import co.electriccoin.zcash.ui.screen.privateusd.toUsd
 import co.electriccoin.zcash.ui.screen.privateusd.toZec
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
@@ -27,6 +32,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -131,6 +137,7 @@ class EnsureNoUnfinishedConversionsUseCaseTest {
                 EnsureNoUnfinishedConversionsUseCase(
                     forward = forward,
                     reverse = mockk { coEvery { active() } returns null },
+                    refunds = mockk(),
                     deposits = mockk { coEvery { records() } returns emptyList() },
                     sends = mockk { coEvery { unsettledCount() } returns 0 },
                     spendGuard = guard(),
@@ -153,15 +160,111 @@ class EnsureNoUnfinishedConversionsUseCaseTest {
             assertEquals(1, blocked.count)
         }
 
+    @Test
+    fun `blocks a refund still to recover, whichever of a kept history it is`() =
+        runTest {
+            val refunds = mockk<ReverseSwapRepository>()
+            coEvery { refunds.canRescue(any()) } returns false
+            coEvery { refunds.canRescue(1) } returns true
+
+            val blocked =
+                assertFailsWith<UnfinishedConversionsException> {
+                    gate(
+                        history =
+                            listOf(
+                                toZec(index = 0, ReversePhase.COMPLETE),
+                                toZec(index = 1, ReversePhase.REFUNDED),
+                                toZec(index = 2, ReversePhase.REFUNDED),
+                            ),
+                        refunds = refunds,
+                    )()
+                }
+
+            assertEquals(0, blocked.count)
+            assertTrue(blocked.hasRefund)
+        }
+
+    @Test
+    fun `passes once a refund has been recovered, without asking about a conversion with none`() =
+        runTest {
+            val refunds = mockk<ReverseSwapRepository>()
+            coEvery { refunds.canRescue(1) } returns false
+
+            gate(
+                history = listOf(toZec(index = 0, ReversePhase.COMPLETE), toZec(index = 1, ReversePhase.REFUNDED)),
+                refunds = refunds,
+            )()
+
+            coVerify(exactly = 0) { refunds.canRescue(0) }
+        }
+
+    @Test
+    fun `a refund check that fails blocks as unreadable`() =
+        runTest {
+            val refunds = mockk<ReverseSwapRepository>()
+            coEvery { refunds.canRescue(any()) } throws IllegalStateException("offline")
+
+            val blocked =
+                assertFailsWith<UnfinishedConversionsException> {
+                    gate(history = listOf(toZec(index = 1, ReversePhase.REFUNDED)), refunds = refunds)()
+                }
+
+            assertNull(blocked.count)
+        }
+
+    @Test
+    fun `a refund check that hangs blocks as unreadable rather than hanging the wipe`() =
+        runTest {
+            val refunds = mockk<ReverseSwapRepository>()
+            coEvery { refunds.canRescue(any()) } coAnswers { awaitCancellation() }
+
+            val blocked =
+                assertFailsWith<UnfinishedConversionsException> {
+                    gate(history = listOf(toZec(index = 1, ReversePhase.REFUNDED)), refunds = refunds)()
+                }
+
+            assertNull(blocked.count)
+        }
+
+    @Test
+    fun `an unreadable history blocks`() =
+        runTest {
+            val gate =
+                EnsureNoUnfinishedConversionsUseCase(
+                    forward = mockk { coEvery { active() } returns null },
+                    reverse =
+                        mockk {
+                            coEvery { active() } returns null
+                            every { observeHistory } returns flow { throw IllegalStateException("corrupt") }
+                        },
+                    refunds = mockk(),
+                    deposits = mockk { coEvery { records() } returns emptyList() },
+                    sends = mockk { coEvery { unsettledCount() } returns 0 },
+                    spendGuard = guard(),
+                    clock = FIXED_CLOCK,
+                )
+
+            val blocked = assertFailsWith<UnfinishedConversionsException> { gate() }
+
+            assertNull(blocked.count)
+        }
+
     private fun gate(
         forward: AtomicSwapRecord? = null,
         reverse: ReverseSwapRecord? = null,
+        history: List<ReverseSwapRecord> = emptyList(),
+        refunds: ReverseSwapRepository = mockk(),
         deposits: List<DepositRecord> = emptyList(),
         unsettledSends: Int = 0,
         spending: PrivateUsdSpendStatus = PrivateUsdSpendStatus.AVAILABLE,
     ) = EnsureNoUnfinishedConversionsUseCase(
         forward = mockk<AtomicSwapRecords> { coEvery { active() } returns forward },
-        reverse = mockk<ReverseSwapRecords> { coEvery { active() } returns reverse },
+        reverse =
+            mockk<ReverseSwapRecords> {
+                coEvery { active() } returns reverse
+                every { observeHistory } returns flowOf(history)
+            },
+        refunds = refunds,
         deposits = mockk<PrivateUsdDepositStore> { coEvery { records() } returns deposits },
         sends = mockk<PrivateUsdSendLog> { coEvery { unsettledCount() } returns unsettledSends },
         spendGuard = guard(spending),

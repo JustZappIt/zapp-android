@@ -14,12 +14,15 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalances
 import xyz.justzappit.railgun.RailgunFees
@@ -33,6 +36,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RailgunEngineTest {
@@ -170,6 +174,27 @@ class RailgunEngineTest {
             coVerify(exactly = 1) { wallet.close() }
         }
 
+    @Test
+    fun `a use that won't stop doesn't keep a reset from wiping the page's storage`() =
+        runTest {
+            val engine = engine()
+            val stuck = CompletableDeferred<Unit>()
+            backgroundScope.launch {
+                runCatching { engine.withSession { withContext(NonCancellable) { stuck.await() } } }
+            }
+            runCurrent()
+
+            val reset = async { engine.reset() }
+            runCurrent()
+            coVerify(exactly = 0) { wallet.wipe() }
+            advanceTimeBy(RESET_WAIT)
+            runCurrent()
+
+            assertTrue(reset.isCompleted)
+            coVerify(exactly = 1) { wallet.wipe() }
+            stuck.complete(Unit)
+        }
+
     // A sync the page is still answering, so no idle close is pending either.
     private fun TestScope.syncInFlight(engine: RailgunEngine): Deferred<RailgunRefresh> {
         val sync = async { engine.withSession { it.refresh() } }
@@ -191,6 +216,7 @@ class RailgunEngineTest {
 
     private companion object {
         const val KEY_BYTES = 32
+        val RESET_WAIT = 6.seconds
         val ADDRESS =
             RailgunAddress(
                 "0zk1qyrs4qyrd08p6uep0fc2y8njktgcpezts3rpaq6q0ln948ecjkw8prv7j6f" +

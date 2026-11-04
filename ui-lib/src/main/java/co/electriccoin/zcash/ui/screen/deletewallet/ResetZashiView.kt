@@ -17,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.security.PinVerifyOverlay
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.CheckboxState
 import co.electriccoin.zcash.ui.design.component.CheckboxTextStyles
@@ -54,6 +55,7 @@ fun ResetZashiView(state: ResetZashiState) {
         )
     }
     ZashiConfirmationBottomSheet(state = state.confirmationDialog)
+    state.pinVerify?.let { PinVerifyOverlay(state = it) }
 }
 
 @Composable

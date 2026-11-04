@@ -38,7 +38,7 @@ data class ChatProfileDeleteDialogState(
     val kind: Kind,
     val onConfirm: () -> Unit,
     val onDismiss: () -> Unit,
-    /** Only with [Kind.CONVERSIONS_BLOCKED]: deletes after all, losing the conversion under way. */
+    /** With a refusal over Shielded USD: deletes after all, losing what's in it. */
     val onDeleteAnyway: (() -> Unit)? = null,
 ) {
     enum class Kind {
@@ -50,6 +50,15 @@ data class ChatProfileDeleteDialogState(
 
         /** A refusal: [onConfirm] opens Shielded USD to see the conversion; [onDeleteAnyway] gives it up. */
         CONVERSIONS_BLOCKED,
+
+        /** A refusal: Shielded USD's records couldn't be checked. [onConfirm] checks again. */
+        CONVERSIONS_UNREADABLE,
+
+        /** A refusal: [onConfirm] opens the refund a finished conversion still has to recover. */
+        REFUND_TO_RECOVER,
+
+        /** The wipe ran but its seed store wouldn't clear. [onConfirm] tries again. */
+        FAILED,
     }
 }
 

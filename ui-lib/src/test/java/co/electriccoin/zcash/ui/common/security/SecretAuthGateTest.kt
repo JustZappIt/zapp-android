@@ -16,9 +16,16 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SecretAuthGateTest {
@@ -122,6 +129,29 @@ class SecretAuthGateTest {
             val fixture = gateWithBiometricResult(null, authMethod = "none")
 
             assertTrue(fixture.gate.authenticate(stringRes("Authenticate")))
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun aWrongPinCancelledDuringItsFeedbackLeavesNoDeadPrompt() =
+        runTest {
+            mockkObject(PinAuthGate)
+            try {
+                coEvery { PinAuthGate.tryVerify(any(), any(), any()) } returns PinAuthGate.Result.Wrong
+                val gate = gateWithBiometricResult(null, authMethod = "pin").gate
+                val outcome = async { gate.authenticate(stringRes("Authenticate")) }
+                runCurrent()
+
+                checkNotNull(gate.pinPrompt.value).onPinSubmit("0000")
+                runCurrent()
+                checkNotNull(gate.pinPrompt.value).onCancel()
+
+                assertFalse(outcome.await())
+                advanceUntilIdle()
+                assertNull(gate.pinPrompt.value)
+            } finally {
+                unmockkObject(PinAuthGate)
+            }
         }
 
     private fun gateWithBiometricResult(

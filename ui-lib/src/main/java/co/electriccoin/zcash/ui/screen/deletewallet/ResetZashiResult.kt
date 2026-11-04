@@ -10,4 +10,7 @@ enum class ResetZashiResult {
 
     /** The biometric prompt was cancelled or failed: nothing was touched. */
     NOT_AUTHENTICATED,
+
+    /** The tail ran, but a preferences store wouldn't clear: the seed may still be on this device. */
+    SEED_NOT_CLEARED,
 }

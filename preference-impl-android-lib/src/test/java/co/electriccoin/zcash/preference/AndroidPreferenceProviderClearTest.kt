@@ -24,7 +24,9 @@ class AndroidPreferenceProviderClearTest {
     fun clearIsCommittedBeforeItIsAnnounced() {
         val dispatcher = StandardTestDispatcher()
         runTest(dispatcher) {
-            val provider = AndroidPreferenceProvider(FakeSharedPreferences(), dispatcher)
+            // What's already queued runs before a commit lands, as an observer on another thread may.
+            val preferences = FakeSharedPreferences(beforeCommit = { testScheduler.runCurrent() })
+            val provider = AndroidPreferenceProvider(preferences, dispatcher)
             val key = PreferenceKey("seed")
             val seen = mutableListOf<String?>()
             val observing = provider.observe(key).onEach { seen += it }.launchIn(this)
@@ -45,7 +47,9 @@ class AndroidPreferenceProviderClearTest {
 }
 
 /** In-memory preferences whose edits land on commit, and which tell listeners about puts and removes only. */
-private class FakeSharedPreferences : SharedPreferences {
+private class FakeSharedPreferences(
+    private val beforeCommit: () -> Unit,
+) : SharedPreferences {
     private val values = mutableMapOf<String, Any?>()
     private val listeners = mutableSetOf<SharedPreferences.OnSharedPreferenceChangeListener>()
 
@@ -140,6 +144,7 @@ private class FakeSharedPreferences : SharedPreferences {
         override fun clear(): SharedPreferences.Editor = apply { clears = true }
 
         override fun commit(): Boolean {
+            beforeCommit()
             if (clears) values.clear()
             removes.forEach { values.remove(it) }
             puts.forEach { (key, value) -> if (value == null) values.remove(key) else values[key] = value }

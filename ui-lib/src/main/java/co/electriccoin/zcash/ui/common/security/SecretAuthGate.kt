@@ -15,6 +15,7 @@ import co.electriccoin.zcash.ui.preference.AuthMethod
 import co.electriccoin.zcash.ui.preference.getAuthMethod
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +84,14 @@ class SecretAuthGate(
             BiometricManager.BIOMETRIC_SUCCESS
 
     private suspend fun authenticateWithPin(): Boolean =
+        try {
+            promptForPin()
+        } finally {
+            prompt.value = null
+        }
+
+    /** Ends only once what shows the prompt has stopped, so nothing can show it again after [authenticate] returned. */
+    private suspend fun promptForPin(): Boolean =
         coroutineScope {
             val outcome = CompletableDeferred<Boolean>()
             var lockoutJob: Job? = null
@@ -120,12 +129,7 @@ class SecretAuthGate(
             }
 
             show(hasError = false, lockoutSecondsRemaining = 0)
-            try {
-                outcome.await()
-            } finally {
-                lockoutJob?.cancel()
-                prompt.value = null
-            }
+            outcome.await().also { coroutineContext.cancelChildren() }
         }
 
     private suspend fun verify(pin: String) =

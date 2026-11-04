@@ -170,6 +170,8 @@ class DeleteChatIdentityUseCaseTest {
             coEvery { synchronizerProvider.getSynchronizer() } returns mockk<CloseableSynchronizer>(relaxed = true)
             coEvery { standardPreferenceProvider() } returns standardPreferences
             coEvery { encryptedPreferenceProvider() } returns encryptedPreferences
+            coEvery { encryptedPreferences.clearPreferences() } returns true
+            coEvery { standardPreferences.clearPreferences() } returns true
 
             val resetZashi =
                 ResetZashiUseCase(
@@ -180,6 +182,7 @@ class DeleteChatIdentityUseCaseTest {
                     encryptedPreferenceProvider = encryptedPreferenceProvider,
                     homeMessageCacheRepository = mockk<HomeMessageCacheRepository>(relaxed = true),
                     biometricRepository = biometricRepository,
+                    secretAuthGate = mockk(relaxed = true),
                     addressBookRepository = addressBookRepository,
                     metadataRepository = metadataRepository,
                     chatBlockedKeysStorageProvider = mockk<ChatBlockedKeysStorageProvider>(relaxed = true),

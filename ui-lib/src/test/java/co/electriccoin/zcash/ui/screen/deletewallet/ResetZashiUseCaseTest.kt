@@ -24,10 +24,12 @@ import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnfinishedConversionsUseCase
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.UnfinishedConversionsException
 import co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException
+import co.electriccoin.zcash.ui.preference.StandardPreferenceKeys
 import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
 import co.electriccoin.zcash.ui.screen.tabs.view.ZappTab
 import io.mockk.Runs
@@ -37,14 +39,18 @@ import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * A wipe must not be able to destroy the only key material that can reach a gift card's funds, nor the records
@@ -252,14 +258,85 @@ class ResetZashiUseCaseTest {
             coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
         }
 
+    @Test
+    fun `a PIN user is asked for the PIN, not for a lock the phone may not have`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false, authMethod = "pin")
+
+            assertEquals(ResetZashiResult.WIPED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 1) { fixture.secretAuthGate.authenticate(any(), any()) }
+            coVerify(exactly = 0) { fixture.biometricRepository.requestBiometrics(any()) }
+        }
+
+    @Test
+    fun `a cancelled PIN wipes nothing`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false, authMethod = "pin")
+            coEvery { fixture.secretAuthGate.authenticate(any(), any()) } returns false
+
+            assertEquals(ResetZashiResult.NOT_AUTHENTICATED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 0) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
+    @Test
+    fun `a store that won't clear is reported, and doesn't stop the one holding the seed`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            coEvery { fixture.standardPreferences.clearPreferences() } throws IllegalStateException("no space")
+
+            assertEquals(ResetZashiResult.SEED_NOT_CLEARED, fixture.useCase(keepFiles = true))
+
+            coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
+    @Test
+    fun `the seed's store refusing to clear is reported`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            coEvery { fixture.encryptedPreferences.clearPreferences() } returns false
+
+            assertEquals(ResetZashiResult.SEED_NOT_CLEARED, fixture.useCase(keepFiles = true))
+        }
+
+    @Test
+    fun `a caller cancelled during the tail doesn't stop the wipe`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            coEvery { fixture.atomicSwapRepository.reset() } coAnswers {
+                started.complete(Unit)
+                release.await()
+            }
+            // A clear that suspends is one a cancelled caller would stop.
+            var isSeedCleared = false
+            coEvery { fixture.encryptedPreferences.clearPreferences() } coAnswers {
+                delay(1)
+                isSeedCleared = true
+                true
+            }
+            val caller = launch { fixture.useCase(keepFiles = true) }
+
+            started.await()
+            caller.cancel()
+            release.complete(Unit)
+            caller.join()
+
+            assertTrue(isSeedCleared)
+        }
+
     private class Fixture(
         hasUnsharedFunds: Boolean?,
         hasUnfinishedConversions: Boolean = false,
         isAuthenticated: Boolean = true,
+        authMethod: String = "biometric",
     ) {
         val encryptedPreferences = mockk<PreferenceProvider>(relaxed = true)
         val standardPreferences = mockk<PreferenceProvider>(relaxed = true)
         val biometricRepository = mockk<BiometricRepository>(relaxed = true)
+        val secretAuthGate = mockk<SecretAuthGate> { coEvery { authenticate(any(), any()) } returns true }
         val walletCoordinator = mockk<WalletCoordinator>(relaxed = true)
         val addressBookRepository = mockk<AddressBookRepository>(relaxed = true)
         val metadataRepository = mockk<MetadataRepository>(relaxed = true)
@@ -297,6 +374,9 @@ class ResetZashiUseCaseTest {
             coEvery { synchronizerProvider.getSynchronizer() } returns mockk<CloseableSynchronizer>(relaxed = true)
             coEvery { standardPreferenceProvider() } returns standardPreferences
             coEvery { encryptedPreferenceProvider() } returns encryptedPreferences
+            coEvery { encryptedPreferences.clearPreferences() } returns true
+            coEvery { standardPreferences.clearPreferences() } returns true
+            coEvery { standardPreferences.getString(StandardPreferenceKeys.AUTH_METHOD.key) } returns authMethod
 
             useCase =
                 ResetZashiUseCase(
@@ -307,6 +387,7 @@ class ResetZashiUseCaseTest {
                     encryptedPreferenceProvider = encryptedPreferenceProvider,
                     homeMessageCacheRepository = mockk<HomeMessageCacheRepository>(relaxed = true),
                     biometricRepository = biometricRepository,
+                    secretAuthGate = secretAuthGate,
                     addressBookRepository = addressBookRepository,
                     metadataRepository = metadataRepository,
                     chatBlockedKeysStorageProvider = mockk<ChatBlockedKeysStorageProvider>(relaxed = true),

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Chat list screen -->
     <string name="chat_list_title">Chats</string>
     <string name="chat_list_empty_title">No conversations yet</string>
@@ -143,6 +143,13 @@
     <string name="chat_profile_delete_conversions_message">A Shielded USD conversion is still under way. Deleting now loses the funds in it. Let it finish first, or delete anyway.</string>
     <string name="chat_profile_delete_conversions_review">Review</string>
     <string name="chat_profile_delete_conversions_delete_anyway">Delete anyway</string>
+    <string name="chat_profile_delete_unreadable_title" tools:ignore="MissingTranslation">Can\'t check Shielded USD</string>
+    <string name="chat_profile_delete_unreadable_message" tools:ignore="MissingTranslation">Zapp couldn\'t check for Shielded USD conversions, deposits, sends or refunds that are still open. Deleting now could lose the funds in them. Try again, or delete anyway.</string>
+    <string name="chat_profile_delete_try_again" tools:ignore="MissingTranslation">Try again</string>
+    <string name="chat_profile_delete_refund_title" tools:ignore="MissingTranslation">Refund to recover</string>
+    <string name="chat_profile_delete_refund_message" tools:ignore="MissingTranslation">A Shielded USD refund can still be recovered. Deleting now loses it, and your recovery phrase won\'t bring it back. Recover it first, or delete anyway.</string>
+    <string name="chat_profile_delete_failed_title" tools:ignore="MissingTranslation">Deletion failed</string>
+    <string name="chat_profile_delete_failed_message" tools:ignore="MissingTranslation">Your identity may still be on this device. Try again.</string>
     <string name="chat_profile_delete_dialog_confirm">Delete</string>
     <string name="chat_profile_delete_dialog_cancel">Cancel</string>
 

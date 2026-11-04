@@ -1,14 +1,17 @@
 package co.electriccoin.zcash.ui.screen.deletewallet
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.component.destructive
+import co.electriccoin.zcash.ui.common.component.error
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnfinishedConversionsUseCase
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
@@ -21,6 +24,7 @@ import co.electriccoin.zcash.ui.design.component.ZashiConfirmationState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.gift.GiftCardListArgs
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
+import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -37,21 +41,28 @@ class ResetZashiVM(
 ) : ViewModel() {
     private val isKeepFilesChecked = MutableStateFlow(true)
     private val confirmationDialogFlow = MutableStateFlow<ZashiConfirmationState?>(null)
+    private val isChecking = MutableStateFlow(false)
     private val resetLce = mutableLce<Unit>()
 
-    /** "Delete anyway" on the gifts dialog, remembered for the conversions dialog that may follow it. */
+    /** "Delete anyway" on the gifts dialog, remembered for the dialogs that may follow it. */
     private var isGiftLossAccepted = false
+
+    /** "Delete anyway" on the conversions dialog, remembered for the last confirmation. */
+    private var isConversionLossAccepted = false
 
     val state: StateFlow<LceState<ResetZashiState>> =
         combine(
             isKeepFilesChecked,
             confirmationDialogFlow,
             resetLce.state,
-        ) { isKeepFilesChecked, confirmationDialog, lce ->
+            isChecking,
+            resetZashi.pinPrompt,
+        ) { isKeepFilesChecked, confirmationDialog, lce, isChecking, pinPrompt ->
             createState(
                 isKeepFilesChecked = isKeepFilesChecked,
                 confirmationDialog = confirmationDialog,
-                isLoading = lce.loading,
+                isLoading = lce.loading || isChecking,
+                pinVerify = pinPrompt,
             )
         }.withLce(resetLce, errorStateMapper::mapToState)
             .stateIn(this, LceState(content = createState(isKeepFilesChecked.value, null, false)))
@@ -60,6 +71,7 @@ class ResetZashiVM(
         isKeepFilesChecked: Boolean,
         confirmationDialog: ZashiConfirmationState?,
         isLoading: Boolean,
+        pinVerify: PinVerifyState? = null,
     ) = ResetZashiState(
         onBack = { navigationRouter.back() },
         checkboxState =
@@ -76,6 +88,7 @@ class ResetZashiVM(
                 onClick = ::onConfirmClicked
             ),
         confirmationDialog = confirmationDialog,
+        pinVerify = pinVerify,
     )
 
     private fun onCheckboxToggled() = isKeepFilesChecked.update { !it }
@@ -83,19 +96,33 @@ class ResetZashiVM(
     // ResetZashiUseCase refuses both cases anyway; the dialogs are what turn its refusals into a way out.
     private fun onConfirmClicked() {
         isGiftLossAccepted = false
+        isConversionLossAccepted = false
+        showAfterChecking {
+            if (hasUnsharedGiftFunds()) createGiftFundsWarningState() else conversionsOrConfirmation()
+        }
+    }
+
+    // A refund's check can reach the network, so the button shows it's working.
+    private fun showAfterChecking(dialog: suspend () -> ZashiConfirmationState) {
         viewModelScope.launch {
-            confirmationDialogFlow.value =
-                when {
-                    hasUnsharedGiftFunds() -> createGiftFundsWarningState()
-                    hasUnfinishedConversions() -> createConversionsWarningState()
-                    else -> createConfirmationState()
-                }
+            isChecking.value = true
+            try {
+                confirmationDialogFlow.value = dialog()
+            } finally {
+                isChecking.value = false
+            }
         }
     }
 
     private suspend fun hasUnsharedGiftFunds() = runCatching { ensureNoUnsharedGiftFunds() }.isFailure
 
-    private suspend fun hasUnfinishedConversions() = runCatching { ensureNoUnfinishedConversions() }.isFailure
+    private suspend fun conversionsOrConfirmation(): ZashiConfirmationState =
+        try {
+            ensureNoUnfinishedConversions()
+            createConfirmationState()
+        } catch (blocked: UnfinishedConversionsException) {
+            createConversionsWarningState(blocked)
+        }
 
     private fun createGiftFundsWarningState(): ZashiConfirmationState =
         ZashiConfirmationState(
@@ -122,29 +149,73 @@ class ResetZashiVM(
         navigationRouter.forward(GiftCardListArgs)
     }
 
-    private fun createConversionsWarningState(): ZashiConfirmationState =
-        ZashiConfirmationState(
-            icon = R.drawable.ic_reset_zashi_warning,
-            title = stringRes(R.string.delete_wallet_conversions_title),
-            message = stringRes(R.string.delete_wallet_conversions_message),
-            primaryAction =
-                ButtonState(
-                    text = stringRes(R.string.delete_wallet_conversions_review),
-                    style = ButtonStyle.PRIMARY,
-                    onClick = ::onReviewConversions,
-                ),
-            secondaryAction =
-                ButtonState(
-                    text = stringRes(R.string.delete_wallet_conversions_delete_anyway),
-                    style = ButtonStyle.TERTIARY,
-                    onClick = ::onConfirmDiscardConversions,
-                ),
-            onBack = ::onDismissConfirmation,
-        )
+    private fun createConversionsWarningState(blocked: UnfinishedConversionsException): ZashiConfirmationState =
+        when {
+            blocked.count == null -> {
+                conversionsWarning(
+                    title = R.string.delete_wallet_conversions_unreadable_title,
+                    message = R.string.delete_wallet_conversions_unreadable_message,
+                    primary = R.string.delete_wallet_try_again,
+                    onPrimary = ::onRetryConversionsCheck,
+                )
+            }
+
+            blocked.hasRefund -> {
+                conversionsWarning(
+                    title = R.string.delete_wallet_refund_title,
+                    message = R.string.delete_wallet_refund_message,
+                    primary = R.string.delete_wallet_refund_review,
+                    onPrimary = ::onReviewRefunds,
+                )
+            }
+
+            else -> {
+                conversionsWarning(
+                    title = R.string.delete_wallet_conversions_title,
+                    message = R.string.delete_wallet_conversions_message,
+                    primary = R.string.delete_wallet_conversions_review,
+                    onPrimary = ::onReviewConversions,
+                )
+            }
+        }
+
+    private fun conversionsWarning(
+        @StringRes title: Int,
+        @StringRes message: Int,
+        @StringRes primary: Int,
+        onPrimary: () -> Unit,
+    ) = ZashiConfirmationState(
+        icon = R.drawable.ic_reset_zashi_warning,
+        title = stringRes(title),
+        message = stringRes(message),
+        primaryAction =
+            ButtonState(
+                text = stringRes(primary),
+                style = ButtonStyle.PRIMARY,
+                onClick = onPrimary,
+            ),
+        secondaryAction =
+            ButtonState(
+                text = stringRes(R.string.delete_wallet_conversions_delete_anyway),
+                style = ButtonStyle.TERTIARY,
+                onClick = ::onConfirmDiscardConversions,
+            ),
+        onBack = ::onDismissConfirmation,
+    )
 
     private fun onReviewConversions() {
         confirmationDialogFlow.value = null
         navigationRouter.forward(PrivateUsdArgs)
+    }
+
+    private fun onReviewRefunds() {
+        confirmationDialogFlow.value = null
+        navigationRouter.forward(PrivateUsdRefundsArgs)
+    }
+
+    private fun onRetryConversionsCheck() {
+        confirmationDialogFlow.value = null
+        showAfterChecking { conversionsOrConfirmation() }
     }
 
     private fun createConfirmationState(): ZashiConfirmationState =
@@ -157,47 +228,51 @@ class ResetZashiVM(
             onBack = ::onDismissConfirmation,
         )
 
+    private fun createFailedState(): ZashiConfirmationState =
+        ZashiConfirmationState.error(
+            message = stringRes(R.string.delete_wallet_failed),
+            primaryText = stringRes(R.string.delete_wallet_try_again),
+            onPrimary = ::onConfirmReset,
+            onBack = ::onDismissConfirmation,
+        )
+
     private fun onDismissConfirmation() {
         confirmationDialogFlow.value = null
     }
 
     private fun onConfirmReset() {
         confirmationDialogFlow.value = null
-        reset(allowConversionLoss = false)
+        reset()
     }
 
-    // Discarding the gifts was the last word before; now a conversion under way still gets its own dialog first.
+    // Every way here ends on the last confirmation, or on a conversion's own dialog first.
     private fun onConfirmDiscardGifts() {
         confirmationDialogFlow.value = null
         isGiftLossAccepted = true
-        viewModelScope.launch {
-            if (hasUnfinishedConversions()) {
-                confirmationDialogFlow.value = createConversionsWarningState()
-            } else {
-                reset(allowConversionLoss = false)
-            }
-        }
+        showAfterChecking { conversionsOrConfirmation() }
     }
 
     private fun onConfirmDiscardConversions() {
-        confirmationDialogFlow.value = null
-        reset(allowConversionLoss = true)
+        isConversionLossAccepted = true
+        confirmationDialogFlow.value = createConfirmationState()
     }
 
-    // A cancelled prompt ends the loading state and nothing else, as before; the result is not shown. A refusal here
-    // means something started behind the prompt, and gets the dialog it would have got before it.
-    private fun reset(allowConversionLoss: Boolean) {
+    // A cancelled prompt ends the loading state and nothing else, as before. A refusal here means something started
+    // behind the prompt, and gets the dialog it would have got before it.
+    private fun reset() {
         resetLce.execute {
             try {
-                resetZashi(
-                    keepFiles = isKeepFilesChecked.value,
-                    allowGiftDataLoss = isGiftLossAccepted,
-                    allowConversionLoss = allowConversionLoss,
-                )
+                val result =
+                    resetZashi(
+                        keepFiles = isKeepFilesChecked.value,
+                        allowGiftDataLoss = isGiftLossAccepted,
+                        allowConversionLoss = isConversionLossAccepted,
+                    )
+                if (result == ResetZashiResult.SEED_NOT_CLEARED) confirmationDialogFlow.value = createFailedState()
             } catch (_: UnsharedGiftFundsException) {
                 confirmationDialogFlow.value = createGiftFundsWarningState()
-            } catch (_: UnfinishedConversionsException) {
-                confirmationDialogFlow.value = createConversionsWarningState()
+            } catch (blocked: UnfinishedConversionsException) {
+                confirmationDialogFlow.value = createConversionsWarningState(blocked)
             }
         }
     }

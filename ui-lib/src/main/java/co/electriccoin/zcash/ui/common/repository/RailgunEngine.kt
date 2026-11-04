@@ -24,10 +24,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import xyz.justzappit.railgun.RailgunNetwork
 import xyz.justzappit.railgun.RailgunSession
 import xyz.justzappit.railgun.RailgunWallet
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The engine, one use at a time, each run in [scope] to its end so no caller frees it while the page works. The page
@@ -77,20 +79,6 @@ internal class RailgunEngine(
             }.await()
 
     /**
-     * [withSession] for a call the page answers at once, whatever else it runs: on a page another use holds open, it
-     * runs without waiting for that use to end. Never for a call that needs the wallet synced, or proves. Should that
-     * use close the page meanwhile, it fails as the page's calls then do, and may be made again.
-     */
-    suspend fun <T> withSessionAlongside(block: suspend (RailgunSession) -> T): T {
-        val held = wallet.session?.takeIf { lock.isLocked } ?: return withSession(block)
-        return scope
-            .async(work) {
-                check(!isReset) { "the wallet is being reset" }
-                block(held)
-            }.await()
-    }
-
-    /**
      * The app's lock changed to [lock]. The gate up ([AppLock.GATE_UP]) closes the page at once, stopping the uses in
      * flight as a reset does, which drops the wallet's keys. A lock in the background ([AppLock.LOCKED]) does the same
      * once it has lasted [AUTHENTICATE_TIMEOUT], after which the app would ask to authenticate again, and leaves the
@@ -127,10 +115,17 @@ internal class RailgunEngine(
         grace?.cancel()
         lockState.compareAndSet(LockState.GRACE, LockState.CLOSED)
         work.cancelChildren()
-        work.children.forEach { it.join() }
-        lock.withLock {
+        // A use that won't stop doesn't get to keep the storage: closing the page ends it, or it never mattered.
+        val owner = Any()
+        withTimeoutOrNull(RESET_STOP_TIMEOUT) {
+            work.children.forEach { it.join() }
+            lock.lock(owner)
+        }
+        try {
             bestEffort("Railgun: the engine's storage wasn't wiped") { wallet.wipe() }
             state.update { it.forgotten() }
+        } finally {
+            if (lock.holdsLock(owner)) lock.unlock(owner)
         }
     }
 
@@ -198,6 +193,7 @@ internal class RailgunEngine(
 
     private companion object {
         val IDLE_CLOSE = 10.minutes
+        val RESET_STOP_TIMEOUT = 5.seconds
     }
 }
 

@@ -69,6 +69,9 @@ private val Kind.title: Int
             Kind.CONFIRM -> R.string.chat_profile_delete_dialog_title
             Kind.GIFT_CARDS_BLOCKED -> R.string.chat_profile_delete_gift_cards_title
             Kind.CONVERSIONS_BLOCKED -> R.string.chat_profile_delete_conversions_title
+            Kind.CONVERSIONS_UNREADABLE -> R.string.chat_profile_delete_unreadable_title
+            Kind.REFUND_TO_RECOVER -> R.string.chat_profile_delete_refund_title
+            Kind.FAILED -> R.string.chat_profile_delete_failed_title
         }
 
 private val Kind.message: Int
@@ -77,6 +80,9 @@ private val Kind.message: Int
             Kind.CONFIRM -> R.string.chat_profile_delete_dialog_message
             Kind.GIFT_CARDS_BLOCKED -> R.string.chat_profile_delete_gift_cards_message
             Kind.CONVERSIONS_BLOCKED -> R.string.chat_profile_delete_conversions_message
+            Kind.CONVERSIONS_UNREADABLE -> R.string.chat_profile_delete_unreadable_message
+            Kind.REFUND_TO_RECOVER -> R.string.chat_profile_delete_refund_message
+            Kind.FAILED -> R.string.chat_profile_delete_failed_message
         }
 
 private val Kind.confirm: Int
@@ -84,5 +90,6 @@ private val Kind.confirm: Int
         when (this) {
             Kind.CONFIRM -> R.string.chat_profile_delete_dialog_confirm
             Kind.GIFT_CARDS_BLOCKED -> R.string.chat_profile_delete_gift_cards_review
-            Kind.CONVERSIONS_BLOCKED -> R.string.chat_profile_delete_conversions_review
+            Kind.CONVERSIONS_BLOCKED, Kind.REFUND_TO_RECOVER -> R.string.chat_profile_delete_conversions_review
+            Kind.CONVERSIONS_UNREADABLE, Kind.FAILED -> R.string.chat_profile_delete_try_again
         }

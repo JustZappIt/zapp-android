@@ -383,10 +383,13 @@ internal class SwapConversionRunner<R : Any>(
     }
 
     override suspend fun reset() {
-        loop.reset()
-        conversions.reset()
-        scheduler.cancel()
-        notifier.clear()
+        try {
+            loop.reset()
+            conversions.reset()
+        } finally {
+            scheduler.cancel()
+            notifier.clear()
+        }
     }
 }
 
