@@ -375,10 +375,11 @@ class PrivateUsdReverseVMTest {
     @Test
     fun `a refunded conversion opens the refund history without waiting for a network check`() =
         runTest {
-            conversion.value = ReverseSwapState(record(ReversePhase.REFUNDED))
+            conversion.value = ReverseSwapState(record(ReversePhase.AWAITING_FUNDING))
             kept.value = listOf(record(ReversePhase.REFUNDED))
             coEvery { repository.canRescue(any()) } returns true
             start()
+            conversion.value = ReverseSwapState(record(ReversePhase.REFUNDED))
 
             assertEquals(
                 stringRes(R.string.refunds_view),
@@ -398,6 +399,36 @@ class PrivateUsdReverseVMTest {
                 vm.state.value.progress
                     ?.amounts as StringResource.ByResource
             assertEquals(stringRes(Zatoshi(0)), amounts.args.last())
+        }
+
+    @Test
+    fun `a finished conversion only shows if it ended here, and never while quoting a new one`() =
+        runTest {
+            conversion.value = ReverseSwapState(record(ReversePhase.AWAITING_FUNDING))
+            start()
+            conversion.value = ReverseSwapState(record(ReversePhase.COMPLETE))
+            assertTrue(checkNotNull(checkNotNull(vm.state.value.progress).result).isSuccess)
+
+            checkNotNull(vm.state.value.primary).onClick()
+            assertNull(vm.state.value.progress)
+
+            // The store reports the new quote after quote() has already returned.
+            val quoted = record(ReversePhase.QUOTED).copy(index = 4)
+            coEvery { repository.quote(any()) } returns quoted
+            val results = mutableListOf<Boolean>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                vm.state.collect { results += it.progress != null }
+            }
+            type("10")
+            conversion.value = ReverseSwapState(quoted)
+
+            assertFalse(results.any { it })
+
+            // Opening the screen later starts on the form, not on a conversion that ended long ago.
+            vm.viewModelScope.cancel()
+            conversion.value = ReverseSwapState(record(ReversePhase.COMPLETE))
+            start()
+            assertNull(vm.state.value.progress)
         }
 
     private fun TestScope.start() {

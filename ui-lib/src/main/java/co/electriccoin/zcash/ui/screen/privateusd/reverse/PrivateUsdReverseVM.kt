@@ -128,18 +128,17 @@ class PrivateUsdReverseVM(
 
     init {
         repository.resume(isForeground = true)
+        viewModelScope.launch {
+            repository.state.collect { swap ->
+                swap.record?.takeIf { it.underWay }?.let { record -> form.update { it.copy(followed = record.index) } }
+            }
+        }
     }
 
     internal fun resetAmount() {
         if (!form.value.canSwitchDirection(repository.state.value.record)) return
         quoteJob?.cancel()
-        form.value =
-            ReverseForm(
-                hidden =
-                    repository.state.value.record
-                        ?.takeIf { it.finished }
-                        ?.index
-            )
+        form.value = ReverseForm()
     }
 
     private fun createState(
@@ -272,7 +271,6 @@ class PrivateUsdReverseVM(
         form.update {
             it.copy(
                 step = ReverseStep.Typing,
-                hidden = if (quoted.isSuccess) null else it.hidden,
                 stale = requested.takeIf { error != null || quoted.isFailure },
                 error = error,
             )
