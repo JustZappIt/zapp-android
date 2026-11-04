@@ -6,6 +6,11 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject
+import androidx.test.uiautomator.UiObjectNotFoundException
+import androidx.test.uiautomator.UiSelector
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.integration.test.common.getPermissionNegativeButtonUiObject
@@ -20,7 +25,9 @@ import org.junit.Assert.assertTrue
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-private const val PERMISSION_DIALOG_TIMEOUT_MILLIS = 10_000L
+internal const val PERMISSION_DIALOG_TIMEOUT_MILLIS = 10_000L
+private const val TAP_ATTEMPTS = 3
+private const val TAP_WAIT_MILLIS = 3_000L
 
 class ScanViewTestSetup(
     private val composeTestRule: ComposeContentTestRule
@@ -39,21 +46,33 @@ class ScanViewTestSetup(
     }
 
     fun grantPermission() {
-        val permissionPositiveActionButton = getPermissionPositiveButtonUiObject()
-        assertNotNull(permissionPositiveActionButton)
-        assertTrue(permissionPositiveActionButton!!.exists())
-
-        permissionPositiveActionButton.click()
+        tapPermissionButton(getPermissionPositiveButtonUiObject())
         awaitPermissionDialogGone(hasTestTag(ScanTag.QR_FRAME))
     }
 
     fun denyPermission() {
-        val permissionNegativeActionButton = getPermissionNegativeButtonUiObject()
-        assertNotNull(permissionNegativeActionButton)
-        assertTrue(permissionNegativeActionButton!!.exists())
-
-        permissionNegativeActionButton.click()
+        tapPermissionButton(getPermissionNegativeButtonUiObject())
         awaitPermissionDialogGone(hasText(getStringResource(R.string.scan_settings_button), ignoreCase = true))
+    }
+
+    // The system's "isn't responding" dialog for a launcher stalled on a cold emulator sits over the permission dialog
+    // and takes its taps until it's closed.
+    private fun tapPermissionButton(button: UiObject?) {
+        assertNotNull(button)
+        assertTrue(button!!.waitForExists(PERMISSION_DIALOG_TIMEOUT_MILLIS))
+        val closeHungApp =
+            UiDevice
+                .getInstance(InstrumentationRegistry.getInstrumentation())
+                .findObject(UiSelector().resourceId("android:id/aerr_close"))
+        repeat(TAP_ATTEMPTS) {
+            if (closeHungApp.exists()) closeHungApp.click()
+            try {
+                button.click()
+            } catch (_: UiObjectNotFoundException) {
+                return
+            }
+            if (button.waitUntilGone(TAP_WAIT_MILLIS)) return
+        }
     }
 
     // While the system dialog closes the activity isn't resumed, and Compose counts no root until it is. The usual

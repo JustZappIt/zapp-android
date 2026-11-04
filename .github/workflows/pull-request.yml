@@ -606,9 +606,15 @@ jobs:
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
+      - name: Free runner disk space
+        uses: ./.github/actions/free-disk-space
+        timeout-minutes: 5
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -723,6 +729,11 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./zapp-android/.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./zapp-android/.github/actions/setup-sdk-companion
+        with:
+          working-directory: zapp-android
       - name: Set up Java
         uses: ./zapp-android/.github/actions/setup-java
         timeout-minutes: 1
