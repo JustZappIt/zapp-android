@@ -65,7 +65,8 @@ class RailgunWallet(
 
     suspend fun close() {
         opened = null
-        host.close()
+        // Cancelled halfway, the page would stay open with nothing left to say it's there.
+        withContext(NonCancellable) { host.close() }
     }
 
     /** Closes the page and deletes everything it stored, wallets included. */

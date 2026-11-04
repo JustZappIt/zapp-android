@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -177,6 +178,28 @@ class AuthenticationViewModelTest {
             advanceUntilIdle()
 
             assertEquals(AuthenticationUIState.NotRequired, viewModel.appAccessAuthenticationResultState.value)
+        }
+
+    /** Shielded USD's page follows this, and must not open for a moment on the last visit's pass. */
+    @Test
+    fun theResultRemembersNoPassFromTheLastVisit() =
+        runTest {
+            val (viewModel, _) = newViewModel(secretState = SecretState.READY)
+            val visit = launch { viewModel.appAccessAuthenticationResultState.collect { } }
+            advanceUntilIdle()
+            viewModel.appAccessAuthentication.value = AuthenticationUIState.Successful
+            advanceUntilIdle()
+            visit.cancel()
+            advanceUntilIdle()
+
+            viewModel.appAccessAuthentication.value = AuthenticationUIState.Initial
+            advanceUntilIdle()
+
+            assertEquals(AuthenticationUIState.Successful, viewModel.appAccessAuthenticationResultState.value)
+            assertEquals(
+                AuthenticationUIState.Required(AuthMethod.BIOMETRIC),
+                viewModel.appAccessAuthenticationResult.first()
+            )
         }
 
     private fun newViewModel(

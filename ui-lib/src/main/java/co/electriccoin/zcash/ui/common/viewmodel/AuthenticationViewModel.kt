@@ -28,6 +28,7 @@ import co.electriccoin.zcash.ui.preference.observeAuthMethod
 import co.electriccoin.zcash.ui.screen.authentication.AuthenticationUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -150,7 +151,11 @@ class AuthenticationViewModel(
     internal val appAccessAuthentication: MutableStateFlow<AuthenticationUIState> =
         MutableStateFlow(AuthenticationUIState.Initial)
 
-    internal val appAccessAuthenticationResultState: StateFlow<AuthenticationUIState> =
+    /**
+     * What the gate says now. [appAccessAuthenticationResultState] says the same with a memory: it answers with the
+     * last visit's outcome until this, stopped while Zapp was away, has run again.
+     */
+    internal val appAccessAuthenticationResult: Flow<AuthenticationUIState> =
         combine(
             isAppAccessAuthenticationRequired.filterNotNull(),
             appAccessAuthentication,
@@ -183,7 +188,10 @@ class AuthenticationViewModel(
                     state
                 }
             }
-        }.stateIn(
+        }
+
+    internal val appAccessAuthenticationResultState: StateFlow<AuthenticationUIState> =
+        appAccessAuthenticationResult.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
             AuthenticationUIState.Initial

@@ -35,6 +35,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -429,6 +430,32 @@ class PrivateUsdReverseVMTest {
             conversion.value = ReverseSwapState(record(ReversePhase.COMPLETE))
             start()
             assertNull(vm.state.value.progress)
+        }
+
+    @Test
+    fun `a quote stopped short by the lock closing the page doesn't stay loading`() =
+        runTest {
+            coEvery { repository.quote(any()) } throws CancellationException("the page closed")
+            start()
+
+            type("10")
+
+            assertFalse(vm.state.value.isQuoting)
+        }
+
+    @Test
+    fun `the refunds stay reachable from the form after a refund that ended while away`() =
+        runTest {
+            kept.value = listOf(record(ReversePhase.REFUNDED))
+            conversion.value = ReverseSwapState(record(ReversePhase.REFUNDED))
+            start()
+
+            assertNull(vm.state.value.progress)
+            assertEquals(
+                stringRes(R.string.refunds_view),
+                vm.state.value.refunds
+                    ?.text
+            )
         }
 
     private fun TestScope.start() {

@@ -259,21 +259,32 @@ class PrivateUsdReverseVM(
     }
 
     private suspend fun requestQuote(requested: Usdc6) {
-        val quoted = runConversionStep("no reverse quote") { repository.quote(requested) }
-        val error =
-            quoted.fold(
-                onSuccess = { record ->
-                    val now = Clock.System.now().epochSeconds
-                    stringRes(R.string.convert_quote_clock_ahead).takeIf { isExpiredQuote(record, now) }
-                },
-                onFailure = { navigationRouter.quoteFailure(it, atomicSwapRepository, repository) },
-            )
-        form.update {
-            it.copy(
-                step = ReverseStep.Typing,
-                stale = requested.takeIf { error != null || quoted.isFailure },
-                error = error,
-            )
+        try {
+            val quoted = runConversionStep("no reverse quote") { repository.quote(requested) }
+            val error =
+                quoted.fold(
+                    onSuccess = { record ->
+                        val now = Clock.System.now().epochSeconds
+                        stringRes(R.string.convert_quote_clock_ahead).takeIf { isExpiredQuote(record, now) }
+                    },
+                    onFailure = { navigationRouter.quoteFailure(it, atomicSwapRepository, repository) },
+                )
+            form.update {
+                it.copy(
+                    step = ReverseStep.Typing,
+                    stale = requested.takeIf { error != null || quoted.isFailure },
+                    error = error,
+                )
+            }
+        } finally {
+            // Stopped short, as when the lock closes the wallet's page. A new amount has its own quote loading.
+            form.update {
+                if (it.step == ReverseStep.Quoting && it.requested == requested) {
+                    it.copy(step = ReverseStep.Typing, stale = requested)
+                } else {
+                    it
+                }
+            }
         }
     }
 

@@ -15,6 +15,8 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.atomicswap.DepositFee
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePause
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePauseException
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
 import co.electriccoin.zcash.ui.common.model.WalletSnapshot
@@ -98,6 +100,7 @@ class PrivateUsdConvertVMTest {
     private val currency = MutableStateFlow(LocalCurrency.DOLLAR)
     private val privateBalance = MutableStateFlow(PrivateUsdBalanceState())
     private val spending = MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
+    private val upgradePause = mockk<SwapUpgradePause>(relaxed = true)
     private lateinit var vm: PrivateUsdConvertVM
 
     @After
@@ -506,6 +509,23 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
+    fun `a conversion paused for the upgrade says so before asking for the app lock`() =
+        runTest {
+            coEvery { upgradePause.requireOpen() } throws SwapUpgradePauseException()
+            start()
+            type("0.5")
+            vm.state.value.primaryButton
+                .onClick()
+
+            vm.state.value.primaryButton
+                .onClick()
+
+            coVerify(exactly = 0) { auth.authenticate(any(), any()) }
+            coVerify(exactly = 0) { swaps.accept(any()) }
+            assertNotNull(vm.state.value.message)
+        }
+
+    @Test
     fun `unknown balances load visibly while cached balances stay visible during refresh`() =
         runTest {
             start()
@@ -561,7 +581,7 @@ class PrivateUsdConvertVMTest {
                     },
                 balanceRepository = balances,
                 observeLocalCurrency = localCurrency,
-                upgradePause = mockk(relaxed = true),
+                upgradePause = upgradePause,
             )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
     }

@@ -75,6 +75,7 @@ import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
 import co.electriccoin.zcash.work.WorkIds
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
@@ -117,6 +118,8 @@ class MainActivity : FragmentActivity() {
     private val atomicSwapRepository: AtomicSwapRepository by inject()
     private val privateUsdDeposits: PrivateUsdDepositsRepository by inject()
     private val railgunWallet: RailgunWalletRepository by inject()
+
+    private var authenticationCheck: Job? = null
 
     private val groupInvites: GroupInviteCoordinator by inject()
 
@@ -309,7 +312,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         Twig.debug { "Activity state: Start" }
-        authenticationViewModel.runAuthenticationRequiredCheck()
+        authenticationCheck = authenticationViewModel.runAuthenticationRequiredCheck()
         checkMigrationRecoveryOnStart()
         // Conversions resume here: from the foreground, their worker may run as a foreground service.
         if (atomicSwapDeployments.current != null) {
@@ -498,7 +501,9 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 try {
-                    authenticationViewModel.appAccessAuthenticationResultState.collect { onShieldedUsdLock(it.appLock) }
+                    // Until this return's check has run, the gate's state is the last visit's.
+                    authenticationCheck?.join()
+                    authenticationViewModel.appAccessAuthenticationResult.collect { onShieldedUsdLock(it.appLock) }
                 } finally {
                     onShieldedUsdLock(AppLock.LOCKED)
                 }
