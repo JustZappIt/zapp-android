@@ -423,8 +423,33 @@ include(":zecswap")
 project(":zecswap").projectDir = externalProjectDir("../zecSwap/android", "zecSwap/android")
 
 val zcashSdkIncludedBuildPath = extra["SDK_INCLUDED_BUILD_PATH"].toString()
+val zcashSdkIncluded = zcashSdkIncludedBuildPath.isNotEmpty() && file(zcashSdkIncludedBuildPath).exists()
 
-if (zcashSdkIncludedBuildPath.isNotEmpty() && file(zcashSdkIncludedBuildPath).exists()) {
+// Without the path, Gradle quietly takes the published SDK, which can't sign after NU7. While a pin
+// is set, anything that builds a release has to come from a clean checkout of that commit.
+val zcashSdkCommitPin = extra["SDK_COMMIT_PIN"].toString()
+if (zcashSdkCommitPin.isNotEmpty()) {
+    gradle.taskGraph.whenReady {
+        if (allTasks.any { it.project.path == ":app" && it.name.contains("Release") }) {
+            fun sdkGit(vararg args: String) =
+                providers
+                    .exec {
+                        commandLine("git", "-C", file(zcashSdkIncludedBuildPath).path, *args)
+                        isIgnoreExitValue = true
+                    }.standardOutput.asText
+                    .get()
+                    .trim()
+            val head = if (zcashSdkIncluded) sdkGit("rev-parse", "HEAD") else "no SDK checkout"
+            val clean = zcashSdkIncluded && sdkGit("status", "--porcelain", "--", ".", ":!.kotlin").isEmpty()
+            check(head == zcashSdkCommitPin && clean) {
+                "A release needs SDK_INCLUDED_BUILD_PATH at a clean checkout of SDK_COMMIT_PIN $zcashSdkCommitPin; " +
+                    "found $head" + if (zcashSdkIncluded && !clean) " with local changes" else ""
+            }
+        }
+    }
+}
+
+if (zcashSdkIncluded) {
     logger.lifecycle("The SDK will be used from $zcashSdkIncludedBuildPath instead of Maven Central.")
     includeBuild(zcashSdkIncludedBuildPath) {
         dependencySubstitution {
