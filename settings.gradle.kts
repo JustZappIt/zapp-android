@@ -440,10 +440,16 @@ if (zcashSdkCommitPin.isNotEmpty()) {
                     .get()
                     .trim()
             val head = if (zcashSdkIncluded) sdkGit("rev-parse", "HEAD") else "no SDK checkout"
-            val clean = zcashSdkIncluded && sdkGit("status", "--porcelain", "--", ".", ":!.kotlin").isEmpty()
-            check(head == zcashSdkCommitPin && clean) {
+            // A cold build compiles the SDK's own scripts, and the compiler keeps session files in .kotlin meanwhile.
+            val changes =
+                if (zcashSdkIncluded) {
+                    sdkGit("status", "--porcelain", "--untracked-files=all", "--", ".", ":(exclude,glob)**/.kotlin/**")
+                } else {
+                    ""
+                }
+            check(head == zcashSdkCommitPin && changes.isEmpty()) {
                 "A release needs SDK_INCLUDED_BUILD_PATH at a clean checkout of SDK_COMMIT_PIN $zcashSdkCommitPin; " +
-                    "found $head" + if (zcashSdkIncluded && !clean) " with local changes" else ""
+                    "found $head" + if (changes.isEmpty()) "" else " with local changes:\n$changes"
             }
         }
     }
