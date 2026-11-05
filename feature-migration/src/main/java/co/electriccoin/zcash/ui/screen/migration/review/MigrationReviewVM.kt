@@ -23,6 +23,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationStepD
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
+import co.electriccoin.zcash.ui.common.model.migration.mapMigrationError
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.migration.preparationStepStatus
 import co.electriccoin.zcash.ui.common.model.migration.preparationStepTimeLabel
@@ -62,9 +63,9 @@ import java.math.BigDecimal
 import java.math.MathContext
 import co.electriccoin.zcash.ui.design.R as DesignR
 
-// Protocol target block interval in seconds, used as the fallback until a measured rate is
-// captured at propose time.
-private const val DEFAULT_SECONDS_PER_BLOCK = 75L
+// Protocol target block interval in seconds from NU7 (ZIP 218), used as the fallback until a
+// measured rate is captured at propose time.
+private const val DEFAULT_SECONDS_PER_BLOCK = 25L
 
 class MigrationReviewVM(
     private val args: MigrationReviewArgs,
@@ -100,7 +101,7 @@ class MigrationReviewVM(
         ) : ReviewProposal()
     }
 
-    // Measured block rate captured at propose time; 75s until then. Drives every
+    // Measured block rate captured at propose time; the NU7 target until then. Drives every
     // height-to-time label on this screen (bursty testnet vs the protocol constant).
     @Volatile
     private var secondsPerBlock: Long = DEFAULT_SECONDS_PER_BLOCK
@@ -199,7 +200,7 @@ class MigrationReviewVM(
             confirmLce.state
         ) { lce, rate, isKeystone, f, confirmState ->
             lce.success?.let { proposal -> createState(proposal, confirmState.loading, rate, isKeystone, f) }
-        }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapToState)
+        }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapMigrationError)
             .stateIn(this)
 
     private fun createState(

@@ -21,7 +21,8 @@ enum class MigrationTransferBlocker {
     UNPROVABLE_ANCHOR,
     EXPIRY_IMMINENT,
     AWAITING_REEVALUATION,
-    UNSATISFIABLE
+    UNSATISFIABLE,
+    UPGRADE_HOLD
 }
 
 fun cash.z.ecc.android.sdk.MigrationBlocker.toAppBlocker(): MigrationTransferBlocker =
@@ -35,6 +36,7 @@ fun cash.z.ecc.android.sdk.MigrationBlocker.toAppBlocker(): MigrationTransferBlo
         cash.z.ecc.android.sdk.MigrationBlocker.EXPIRY_IMMINENT -> MigrationTransferBlocker.EXPIRY_IMMINENT
         cash.z.ecc.android.sdk.MigrationBlocker.AWAITING_REEVALUATION -> MigrationTransferBlocker.AWAITING_REEVALUATION
         cash.z.ecc.android.sdk.MigrationBlocker.UNSATISFIABLE -> MigrationTransferBlocker.UNSATISFIABLE
+        cash.z.ecc.android.sdk.MigrationBlocker.UPGRADE_HOLD -> MigrationTransferBlocker.UPGRADE_HOLD
     }
 
 /**

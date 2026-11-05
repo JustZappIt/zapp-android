@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.affectedTransferIndices
+import co.electriccoin.zcash.ui.common.model.migration.mapMigrationError
 import co.electriccoin.zcash.ui.common.model.migration.toMigrationRangeText
 import co.electriccoin.zcash.ui.common.model.migration.toUiKind
 import co.electriccoin.zcash.ui.common.model.mutableLce
@@ -66,7 +67,7 @@ class MigrationTransferInvalidVM(
     val state: StateFlow<LceState<MigrationTransferInvalidState>> =
         recoveryInfo
             .map { info -> buildState(info) }
-            .withLce(groupLce(loadLce, restartLce), errorStateMapper::mapToState)
+            .withLce(groupLce(loadLce, restartLce), errorStateMapper::mapMigrationError)
             .stateIn(this)
 
     private fun buildState(info: RecoveryInfo): MigrationTransferInvalidState {

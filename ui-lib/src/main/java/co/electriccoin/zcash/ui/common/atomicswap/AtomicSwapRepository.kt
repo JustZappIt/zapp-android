@@ -84,6 +84,7 @@ internal class AtomicSwapRepositoryImpl(
     notifier: AtomicSwapNotifier,
     private val spendGuard: PrivateUsdSpendGuard,
     private val tokens: AtomicSwapTokens,
+    private val upgradePause: SwapUpgradePause,
     scope: CoroutineScope = swapScope(),
     private val driverLock: Mutex = Mutex(),
     private val payouts: AtomicSwapPayouts = AtomicSwapPayouts(sessions, store, scope),
@@ -128,6 +129,7 @@ internal class AtomicSwapRepositoryImpl(
     }
 
     override suspend fun accept(offer: AtomicSwapOffer): AtomicSwapRecord {
+        upgradePause.requireOpen()
         val session = sessions.session
         try {
             return spendGuard.startConversion {

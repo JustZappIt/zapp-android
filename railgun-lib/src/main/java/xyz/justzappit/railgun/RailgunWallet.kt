@@ -65,7 +65,8 @@ class RailgunWallet(
 
     suspend fun close() {
         opened = null
-        host.close()
+        // Cancelled halfway, the page would stay open with nothing left to say it's there.
+        withContext(NonCancellable) { host.close() }
     }
 
     /** Closes the page and deletes everything it stored, wallets included. */
@@ -103,14 +104,6 @@ class RailgunSession internal constructor(
                 }.toMap()
         return RailgunRefresh(RailgunBalances(balances), result.received?.let(::receivedSends))
     }
-
-    /**
-     * A new note for a deposit to shield into this wallet, which the page built with Railgun's engine and opened again
-     * with the wallet's viewing key before giving it out ([RailgunDepositNote]). It needs no sync, and each call makes
-     * another.
-     */
-    suspend fun depositNote(): RailgunDepositNote =
-        page.request(RailgunMethod.DEPOSIT_NOTE, EMPTY, WireDepositNote.serializer()).toNote(address)
 
     /** What [broadcaster] charges to send [transfer], from the SDK's estimate of its gas; nothing is proved. */
     suspend fun broadcasterFee(

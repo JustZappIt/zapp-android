@@ -30,7 +30,7 @@ env:
   # with .zapp-deps; verify_composite_build fails when the two disagree.
   ZAPP_MESSAGING_REF: 58f3cc72792d5efe663ebb4fd397f845dfcec2ac
   BARE_KIT_REF: 15a3569f3d704de7151761051c8d9cc2e299414f
-  ZECSWAP_REF: 88f8dfe5ee55055a416257a0e56cec97d2851c5b
+  ZECSWAP_REF: 8a5c642571ec730dcf0b0c2359484c2c71ae341d
 
 jobs:
   validate_gradle_wrapper:
@@ -345,6 +345,9 @@ jobs:
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
+      - name: Free runner disk space
+        uses: ./.github/actions/free-disk-space
+        timeout-minutes: 5
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
@@ -358,7 +361,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         timeout-minutes: 5
       - name: Test
-        timeout-minutes: 30
+        timeout-minutes: 60
         env:
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
@@ -603,9 +606,15 @@ jobs:
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
+      - name: Free runner disk space
+        uses: ./.github/actions/free-disk-space
+        timeout-minutes: 5
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -711,9 +720,20 @@ jobs:
           verify_sha zappMessaging ../zappMessaging
           verify_sha bare-kit ../bare-kit
           verify_sha zecSwap ../zecSwap
+          sdk_dep=$(grep '^zcashAndroidWalletSdk=' .zapp-deps | cut -d= -f2)
+          sdk_pin=$(grep '^SDK_COMMIT_PIN=' gradle.properties | cut -d= -f2)
+          if [ -n "$sdk_pin" ] && [ "$sdk_dep" != "$sdk_pin" ]; then
+            echo "::error::SDK pin mismatch: .zapp-deps has ${sdk_dep}, gradle.properties has ${sdk_pin}"
+            exit 1
+          fi
       - name: Set up bare-kit npm dependencies
         uses: ./zapp-android/.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./zapp-android/.github/actions/setup-sdk-companion
+        with:
+          working-directory: zapp-android
       - name: Set up Java
         uses: ./zapp-android/.github/actions/setup-java
         timeout-minutes: 1
@@ -934,6 +954,12 @@ jobs:
         timeout-minutes: 10
         uses: ./.github/actions/foss/strip
 
+      # After the strip, whose find edits every lockfile it reaches: the release guard in
+      # settings.gradle.kts needs this checkout clean.
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
+
       - name: Build FOSS APK
         timeout-minutes: 75
         env:
@@ -1101,9 +1127,15 @@ jobs:
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
+      - name: Free runner disk space
+        uses: ./.github/actions/free-disk-space
+        timeout-minutes: 5
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1

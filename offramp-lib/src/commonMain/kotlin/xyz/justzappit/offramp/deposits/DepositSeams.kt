@@ -20,11 +20,21 @@ interface DepositKeyring {
 }
 
 /**
- * A new note for a deposit or a rescue to shield to, built to the wallet's own Railgun keys and opened as its receiver
- * would before it's given out. Each is new, and none can be built again: keep the request that pays it whole.
+ * The notes deposits and rescues shield to, built from the wallet's seed through zecSwap's crates to its own Railgun
+ * keys and opened as its receiver would before they're given out. A shield's is address [index]'s for its
+ * authorization's `validBefore`, a rescue's for the contract's nonce: each signing has a note of its own, which the
+ * request kept for it builds again.
  */
-fun interface DepositNotes {
-    suspend fun note(): DepositNote
+interface DepositNotes {
+    suspend fun shield(
+        index: Int,
+        validBefore: Long,
+    ): DepositNote
+
+    suspend fun rescue(
+        index: Int,
+        nonce: Long,
+    ): DepositNote
 }
 
 /** Where deposits are kept, each before anything posts it. A store that can't be read throws: it's never empty. */

@@ -7,6 +7,7 @@ import androidx.annotation.StringRes
 import cash.z.ecc.android.sdk.exception.SdkException
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePauseException
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendBlockedException
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -51,6 +52,7 @@ internal enum class PrivateUsdFailure(
     TOR_OFF(R.string.convert_error_tor_off),
     BELOW_RELAYER_FEE(R.string.convert_error_below_fee),
     AMOUNT_REFUSED(R.string.convert_error_amount_refused),
+    UPGRADE_PAUSE(R.string.convert_error_upgrade_pause),
 
     /** Another conversion is under way: its screen is the place to be. */
     SWAP_UNDER_WAY(null),
@@ -64,6 +66,7 @@ internal enum class PrivateUsdFailure(
 internal fun Throwable.toFailure(): PrivateUsdFailure =
     when (this) {
         is ReverseRefundUnavailableException -> PrivateUsdFailure.REFUND_UNAVAILABLE
+        is SwapUpgradePauseException -> PrivateUsdFailure.UPGRADE_PAUSE
         is PrivateUsdSpendBlockedException -> PrivateUsdFailure.PAYMENT_PENDING
         is ZecInputQuoteException -> PrivateUsdFailure.NO_QUOTE_FITS
         is AtomicSwapBlockedException -> reason.toFailure()
@@ -95,14 +98,20 @@ private fun AtomicSwapService.toFailure() =
         AtomicSwapService.RELAYER -> PrivateUsdFailure.RELAYER_UNREACHABLE
     }
 
-// Rejected: out of range or under the swap's network cost. Unavailable: more than the maker holds, or a stale price.
+// Rejected: out of range or under the swap's network cost. Unavailable names the amount only in the maker's own words:
+// a stale price says otherwise, and so does the gateway when it can't reach the maker at all.
 private fun AtomicSwapHttpException.Refused.refusal() =
     when {
         service == AtomicSwapService.RELAYER -> PrivateUsdFailure.RELAYER_REFUSED
         code == SwapErrorCode.REJECTED -> PrivateUsdFailure.AMOUNT_REFUSED
-        code == SwapErrorCode.UNAVAILABLE -> PrivateUsdFailure.MAKER_CANT_FILL
+        cantFillAmount -> PrivateUsdFailure.MAKER_CANT_FILL
         else -> service.toFailure()
     }
+
+private val AtomicSwapHttpException.Refused.cantFillAmount: Boolean
+    get() = code == SwapErrorCode.UNAVAILABLE && message.orEmpty().contains(MAKER_CANT_FILL_REASON)
+
+private const val MAKER_CANT_FILL_REASON = "cannot fill that amount"
 
 private fun AtomicSwapBlock.toFailure() =
     when (this) {

@@ -216,6 +216,16 @@ class MigrationDriveOnceTest {
     }
 
     @Test
+    fun `a transaction held for the upgrade never accelerates`() {
+        assertFalse(
+            broadcastDueByEstimate(
+                states(tx(1, scheduled = 150, blocker = MigrationBlocker.UPGRADE_HOLD)),
+                estimatedTip = 200,
+            )
+        )
+    }
+
+    @Test
     fun `an unavailable estimate never accelerates`() {
         assertFalse(broadcastDueByEstimate(states(tx(1, scheduled = 150)), estimatedTip = -1))
     }

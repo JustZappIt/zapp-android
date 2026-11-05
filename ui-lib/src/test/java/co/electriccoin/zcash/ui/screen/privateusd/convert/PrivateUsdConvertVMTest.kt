@@ -15,6 +15,8 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.atomicswap.DepositFee
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePause
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePauseException
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
 import co.electriccoin.zcash.ui.common.model.WalletSnapshot
@@ -98,6 +100,7 @@ class PrivateUsdConvertVMTest {
     private val currency = MutableStateFlow(LocalCurrency.DOLLAR)
     private val privateBalance = MutableStateFlow(PrivateUsdBalanceState())
     private val spending = MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
+    private val upgradePause = mockk<SwapUpgradePause>(relaxed = true)
     private lateinit var vm: PrivateUsdConvertVM
 
     @After
@@ -386,8 +389,18 @@ class PrivateUsdConvertVMTest {
                         R.string.convert_error_relayer_refused,
                     AtomicSwapHttpException.Unreachable(AtomicSwapService.MAKER, IOException("down")) to
                         R.string.convert_error_maker,
-                    AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 503, SwapErrorCode.UNAVAILABLE, "short") to
-                        R.string.convert_error_maker_cant_fill,
+                    AtomicSwapHttpException.Refused(
+                        AtomicSwapService.MAKER,
+                        503,
+                        SwapErrorCode.UNAVAILABLE,
+                        "cannot fill that amount right now",
+                    ) to R.string.convert_error_maker_cant_fill,
+                    AtomicSwapHttpException.Refused(
+                        AtomicSwapService.MAKER,
+                        503,
+                        SwapErrorCode.UNAVAILABLE,
+                        "swap service is temporarily unavailable",
+                    ) to R.string.convert_error_maker,
                     AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 400, SwapErrorCode.REJECTED, "range") to
                         R.string.convert_error_amount_refused,
                     AtomicSwapBlockedException(AtomicSwapBlock.AMOUNT_UNQUOTABLE, "more than a quote can name") to
@@ -496,6 +509,23 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
+    fun `a conversion paused for the upgrade says so before asking for the app lock`() =
+        runTest {
+            coEvery { upgradePause.requireOpen() } throws SwapUpgradePauseException()
+            start()
+            type("0.5")
+            vm.state.value.primaryButton
+                .onClick()
+
+            vm.state.value.primaryButton
+                .onClick()
+
+            coVerify(exactly = 0) { auth.authenticate(any(), any()) }
+            coVerify(exactly = 0) { swaps.accept(any()) }
+            assertNotNull(vm.state.value.message)
+        }
+
+    @Test
     fun `unknown balances load visibly while cached balances stay visible during refresh`() =
         runTest {
             start()
@@ -551,6 +581,7 @@ class PrivateUsdConvertVMTest {
                     },
                 balanceRepository = balances,
                 observeLocalCurrency = localCurrency,
+                upgradePause = upgradePause,
             )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
     }

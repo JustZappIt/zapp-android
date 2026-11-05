@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+<resources xmlns:tools="http://schemas.android.com/tools" xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="delete_wallet_title">Reset Zapp</string>
     <string name="delete_wallet_text_1">Make sure you have both your secret recovery phrase and wallet birthday height saved before you proceed.</string>
     <string name="delete_wallet_text_2">Resetting the Zapp app will delete the Zapp database and cache, and will disconnect all connected hardware wallets.</string>
@@ -16,5 +16,15 @@
     <string name="delete_wallet_gift_cards_message">Resetting now permanently deletes Zpacket links that can still control funds. Review and resolve them first, or delete them anyway to start fresh.</string>
     <string name="delete_wallet_gift_cards_review">Review Zpackets</string>
     <string name="delete_wallet_gift_cards_delete_anyway">Delete anyway</string>
+    <string name="delete_wallet_conversions_title">Conversion under way</string>
+    <string name="delete_wallet_conversions_message">A Shielded USD conversion is still under way. Resetting now loses the funds in it. Let it finish first, or delete anyway.</string>
+    <string name="delete_wallet_conversions_review">Review conversion</string>
+    <string name="delete_wallet_conversions_delete_anyway">Delete anyway</string>
+    <string name="delete_wallet_conversions_unreadable_title" tools:ignore="MissingTranslation">Can\'t check Shielded USD</string>
+    <string name="delete_wallet_conversions_unreadable_message" tools:ignore="MissingTranslation">Zapp couldn\'t check for Shielded USD conversions, deposits, sends or refunds that are still open. Resetting now could lose the funds in them. Try again, or delete anyway.</string>
+    <string name="delete_wallet_refund_title" tools:ignore="MissingTranslation">Refund to recover</string>
+    <string name="delete_wallet_refund_message" tools:ignore="MissingTranslation">A Shielded USD refund can still be recovered. Resetting now loses it, and your recovery phrase won\'t bring it back. Recover it first, or delete anyway.</string>
+    <string name="delete_wallet_refund_review" tools:ignore="MissingTranslation">Review refunds</string>
+    <string name="delete_wallet_try_again" tools:ignore="MissingTranslation">Try again</string>
     <string name="delete_wallet_failed">Wallet deletion failed. Try it again, please.</string>
 </resources>

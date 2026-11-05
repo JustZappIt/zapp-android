@@ -7,6 +7,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
 import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
+import co.electriccoin.zcash.ui.common.security.AppLock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +19,6 @@ import kotlinx.coroutines.launch
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalances
 import xyz.justzappit.railgun.RailgunBroadcaster
-import xyz.justzappit.railgun.RailgunDepositNote
 import xyz.justzappit.railgun.RailgunEvent
 import xyz.justzappit.railgun.RailgunFees
 import xyz.justzappit.railgun.RailgunMerkletree
@@ -63,16 +63,14 @@ interface RailgunWalletRepository {
 
     suspend fun prepareReverse(request: RailgunReverseRequest): RailgunReverseTransaction
 
-    /**
-     * A new note for a deposit to shield into this wallet ([RailgunDepositNote]), checked to pay the wallet the Zapp
-     * seed's Railgun mnemonic makes. It starts the engine and opens the wallet if need be, never syncs, and doesn't
-     * wait for a sync under way: a wallet's first takes up to an hour and a half on a phone. A note can't be made
-     * again, so keep it whole before a deposit that pays it goes out.
-     */
-    suspend fun depositNote(): RailgunDepositNote
-
     /** Stops the engine and deletes what it stored, for a wallet about to be wiped. */
     suspend fun reset()
+
+    /**
+     * Zapp's lock changed to [lock]. The page follows it: the authentication gate up closes it at once, and a lock in
+     * the background once it has lasted the gate's timeout, which drops the wallet's keys until the unlock.
+     */
+    fun onAppLock(lock: AppLock)
 }
 
 /** Balances as a sync of the wallet at [address] found them, with the private sends it received. */
@@ -146,7 +144,13 @@ class RailgunWalletRepositoryImpl(
         transfer: RailgunTransfer,
         broadcaster: RailgunBroadcaster,
         fee: BigInteger
-    ): RailgunRelayedProof = proving { it.prove(transfer, broadcaster, fee) }
+    ): RailgunRelayedProof =
+        withSession { session ->
+            mutableState.update { it.copy(phase = RailgunWalletState.Phase.PROVING, proof = null) }
+            session.prove(transfer, broadcaster, fee).also {
+                mutableState.update { it.copy(phase = RailgunWalletState.Phase.READY) }
+            }
+        }
 
     override suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
         withSession { it.reverseCost(request) }
@@ -157,32 +161,18 @@ class RailgunWalletRepositoryImpl(
             it.prepareReverse(request)
         }
 
-    override suspend fun depositNote(): RailgunDepositNote {
-        val note = withSession(alongside = true) { it.depositNote() }
-        // A note made alongside a use of the wallet before a change of wallets would pay that wallet.
-        check(note.receiver == mnemonicProvider.address()) { "the deposit note pays another wallet than the seed's" }
-        return note
-    }
-
     override suspend fun reset() {
         engine?.reset()
     }
 
-    private suspend fun <T> withSession(
-        alongside: Boolean = false,
-        block: suspend (RailgunSession) -> T,
-    ): T {
-        val engine = checkNotNull(engine) { "this build has no Railgun network" }
-        return mutableState.reported {
-            if (alongside) engine.withSessionAlongside(block) else engine.withSession(block)
-        }
+    override fun onAppLock(lock: AppLock) {
+        engine?.onAppLock(lock)
     }
 
-    private suspend fun proving(prove: suspend (RailgunSession) -> RailgunRelayedProof) =
-        withSession { session ->
-            mutableState.update { it.copy(phase = RailgunWalletState.Phase.PROVING, proof = null) }
-            prove(session).also { mutableState.update { it.copy(phase = RailgunWalletState.Phase.READY) } }
-        }
+    private suspend fun <T> withSession(block: suspend (RailgunSession) -> T): T {
+        val engine = checkNotNull(engine) { "this build has no Railgun network" }
+        return mutableState.reported { engine.withSession(block) }
+    }
 }
 
 private suspend fun MutableStateFlow<RailgunWalletState>.syncWith(session: RailgunSession): RailgunSync {

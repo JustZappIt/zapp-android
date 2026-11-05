@@ -35,8 +35,9 @@ class PrivateUsdDepositKeyring(
         val missing = indices.filterNot { shown.addresses.containsKey(it) }
         if (missing.isNotEmpty()) {
             val derived = missing.min()..missing.max()
-            withSeed { seed -> DepositKeys.addresses(seed, isMainnet(), ACCOUNT, derived) }
-                .forEachIndexed { offset, address -> shown.addresses.putIfAbsent(derived.first + offset, address) }
+            withSeed { seed ->
+                DepositKeys.addresses(seed, deployments.depositsOnMainnet(), DEPOSIT_ACCOUNT, derived)
+            }.forEachIndexed { offset, address -> shown.addresses.putIfAbsent(derived.first + offset, address) }
         }
         return indices.map { shown.addresses.getValue(it) }
     }
@@ -44,7 +45,10 @@ class PrivateUsdDepositKeyring(
     override suspend fun <T> withKey(
         index: Int,
         block: (DepositKey) -> T,
-    ): T = withSeed { seed -> DepositKeys.withKey(seed, isMainnet(), ACCOUNT, index, block) }
+    ): T =
+        withSeed { seed ->
+            DepositKeys.withKey(seed, deployments.depositsOnMainnet(), DEPOSIT_ACCOUNT, index, block)
+        }
 
     private suspend fun <T> withSeed(block: (ByteArray) -> T): T =
         withContext(Dispatchers.Default) {
@@ -55,11 +59,6 @@ class PrivateUsdDepositKeyring(
                 seed.fill(0)
             }
         }
-
-    // Testnet's coin type keeps testnet and mainnet addresses unlinked.
-    private fun isMainnet(): Boolean =
-        checkNotNull(deployments.current) { "no deposits on this network" }.swap.zcashNetwork ==
-            SwapZcashNetwork.MAINNET
 
     // Kept for one wallet at a time: another wallet's indices are other addresses.
     private suspend fun shown(): ShownAddresses {
@@ -72,9 +71,11 @@ class PrivateUsdDepositKeyring(
     ) {
         val addresses = ConcurrentHashMap<Int, Address>()
     }
-
-    private companion object {
-        /** Zapp's ZIP 32 account, whose deposit addresses take BIP-44 account 1000. */
-        const val ACCOUNT = 0
-    }
 }
+
+/** Zapp's ZIP 32 account, whose deposit addresses take BIP-44 account 1000. */
+internal const val DEPOSIT_ACCOUNT = 0
+
+/** Whether deposit keys derive on mainnet's coin type: testnet's keeps testnet and mainnet addresses unlinked. */
+internal fun AtomicSwapDeployments.depositsOnMainnet(): Boolean =
+    checkNotNull(current) { "no deposits on this network" }.swap.zcashNetwork == SwapZcashNetwork.MAINNET

@@ -31,8 +31,8 @@ internal data class ReverseForm(
     val currency: LocalCurrency? = null,
     val requested: Usdc6? = null,
     val step: ReverseStep = ReverseStep.Typing,
-    /** A finished conversion kept out of sight while a new one is set up. */
-    val hidden: Int? = null,
+    /** The conversion this screen saw under way, whose ending it goes on to show. */
+    val followed: Int? = null,
     /** An amount no fresh quote came for; it's asked for again once the amount changes. */
     val stale: Usdc6? = null,
     val error: StringResource? = null,
@@ -56,10 +56,14 @@ internal data class ReverseForm(
     val isReviewing: Boolean
         get() = step == ReverseStep.Reviewing || (step as? ReverseStep.Acting)?.from == ReverseStep.Reviewing
 
-    /** The kept conversion to show: not a hidden one, and a quote only for the amount it was for. */
+    /** The kept conversion to show: one under way, one that ended here, and a quote only for its own amount. */
     fun shown(record: ReverseSwapRecord?): ReverseSwapRecord? =
-        record?.takeUnless {
-            it.index == hidden || (it.phase == ReversePhase.QUOTED && it.quote.terms.amount != requested)
+        record?.takeIf {
+            when {
+                it.phase == ReversePhase.QUOTED -> it.quote.terms.amount == requested
+                it.finished -> it.index == followed
+                else -> true
+            }
         }
 
     /** What paying takes from the private balance: the quote's debit, or the typed amount before there's one. */

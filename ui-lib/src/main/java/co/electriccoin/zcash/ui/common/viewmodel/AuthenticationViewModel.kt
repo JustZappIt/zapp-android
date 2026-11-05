@@ -18,6 +18,7 @@ import co.electriccoin.zcash.spackle.AndroidApiVersion
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
+import co.electriccoin.zcash.ui.common.security.AUTHENTICATE_TIMEOUT
 import co.electriccoin.zcash.ui.common.security.PinAuthGate
 import co.electriccoin.zcash.ui.preference.AuthMethod
 import co.electriccoin.zcash.ui.preference.EncryptedPreferenceKeys
@@ -27,6 +28,7 @@ import co.electriccoin.zcash.ui.preference.observeAuthMethod
 import co.electriccoin.zcash.ui.screen.authentication.AuthenticationUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,10 +43,8 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
 
 private const val DEFAULT_INITIAL_DELAY = 0
-private val AUTHENTICATE_TIMEOUT = 15.minutes.inWholeMilliseconds
 
 class AuthenticationViewModel(
     application: Application,
@@ -151,7 +151,11 @@ class AuthenticationViewModel(
     internal val appAccessAuthentication: MutableStateFlow<AuthenticationUIState> =
         MutableStateFlow(AuthenticationUIState.Initial)
 
-    internal val appAccessAuthenticationResultState: StateFlow<AuthenticationUIState> =
+    /**
+     * What the gate says now. [appAccessAuthenticationResultState] says the same with a memory: it answers with the
+     * last visit's outcome until this, stopped while Zapp was away, has run again.
+     */
+    internal val appAccessAuthenticationResult: Flow<AuthenticationUIState> =
         combine(
             isAppAccessAuthenticationRequired.filterNotNull(),
             appAccessAuthentication,
@@ -184,7 +188,10 @@ class AuthenticationViewModel(
                     state
                 }
             }
-        }.stateIn(
+        }
+
+    internal val appAccessAuthenticationResultState: StateFlow<AuthenticationUIState> =
+        appAccessAuthenticationResult.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
             AuthenticationUIState.Initial
@@ -216,7 +223,7 @@ class AuthenticationViewModel(
                     // Wall-clock went backward → clock manipulation, treat as expired.
                     nowWalltime < storedWalltime -> true
 
-                    else -> (nowRealtime - storedRealtime) > AUTHENTICATE_TIMEOUT
+                    else -> (nowRealtime - storedRealtime) > AUTHENTICATE_TIMEOUT.inWholeMilliseconds
                 }
 
             if (expired) resetEntireAuthenticationState()

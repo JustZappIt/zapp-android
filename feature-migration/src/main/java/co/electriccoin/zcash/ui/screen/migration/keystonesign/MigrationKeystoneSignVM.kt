@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.model.Pczt
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
+import co.electriccoin.zcash.ui.common.model.migration.isMigrationPausedForNu7
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPczts
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
@@ -175,10 +177,15 @@ class MigrationKeystoneSignVM(
                     qrParts.value = parts
                     roundInfo.value = roundIndex to totalRounds
                 }
-            }.onFailure {
+            }.onFailure { e ->
                 failureSheet.update {
                     MigrationTransferFailureState(
-                        message = stringRes(DesignR.string.migrationKeystoneSign_prepareErrorMessage),
+                        message =
+                            if (e.isMigrationPausedForNu7()) {
+                                stringRes(R.string.ironwood_migration_paused_message)
+                            } else {
+                                stringRes(DesignR.string.migrationKeystoneSign_prepareErrorMessage)
+                            },
                         onRetry = {
                             failureSheet.value = null
                             buildBatch()

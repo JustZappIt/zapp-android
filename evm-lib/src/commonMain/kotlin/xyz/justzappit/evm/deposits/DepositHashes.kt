@@ -17,8 +17,8 @@ import xyz.justzappit.evm.types.ChainId
 
 /**
  * The Railgun note a deposit or a rescue shields to, as the Deposits contract takes it: its note public key [npk], then
- * its `ShieldCiphertext`, the three words of [encryptedBundle] and [shieldKey]. The wallet's Railgun page builds it to
- * the wallet's own keys and opens it as its receiver would before anything signs for it: Railgun takes any ciphertext,
+ * its `ShieldCiphertext`, the three words of [encryptedBundle] and [shieldKey]. The wallet builds it from its seed to
+ * its own Railgun keys and opens it as its receiver would before anything signs for it: Railgun takes any ciphertext,
  * and a note its receiver can't open is lost. Never show or log one, so [toString] tells nothing of it.
  */
 class DepositNote(
@@ -128,7 +128,7 @@ class ReceiveAuthorization(
  * One Deposits contract, [contract] on [chainId]: what a deposit's authorization commits to there, and what the owner
  * of a deposit address signs to shield again what Railgun's screening sent back to the address's vault.
  *
- * A deposit, as zecSwap's `docs/deposits.md` signs it: the note from the Railgun page ([DepositNote]); its nonce,
+ * A deposit, as zecSwap's `docs/deposits.md` signs it: the note built from the seed ([DepositNote]); its nonce,
  * [depositNonce] with the fee and the relayer's deposits account; then [TokenDomain.receiveWithAuthorization] of a
  * [ReceiveAuthorization] with that nonce, signed by the address's [DepositKey]. A rescue signs [rescue] the same way.
  */

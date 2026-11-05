@@ -19,10 +19,12 @@ import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapZcashImpl
 import co.electriccoin.zcash.ui.common.atomicswap.SwapKeyring
 import co.electriccoin.zcash.ui.common.atomicswap.SwapTokenStoreImpl
+import co.electriccoin.zcash.ui.common.atomicswap.SwapUpgradePause
 import co.electriccoin.zcash.ui.common.atomicswap.SwapZcashTransactions
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProvider
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProviderImpl
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositKeyring
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositNotes
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositStore
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
@@ -538,6 +540,7 @@ val providerModule =
         singleOf(::AtomicSwapZcashImpl) bind AtomicSwapZcash::class
         singleOf(::ReverseSwapZcashImpl) bind ReverseSwapZcash::class
         singleOf(::AtomicSwapZcashInfo)
+        singleOf(::SwapUpgradePause)
         singleOf(::AtomicSwapDeployments)
         single {
             AtomicSwapSessions(
@@ -573,6 +576,7 @@ val providerModule =
         single { PrivateUsdSenders(get(), get(), get(named(ATOMIC_SWAP_HTTP)), get(), get()) }
         singleOf(::PrivateUsdSendLog)
         singleOf(::PrivateUsdDepositKeyring)
+        singleOf(::PrivateUsdDepositNotes)
         singleOf(::PrivateUsdDepositStore)
     }
 

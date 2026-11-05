@@ -27,7 +27,6 @@ import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunBalances
 import xyz.justzappit.railgun.RailgunBroadcaster
-import xyz.justzappit.railgun.RailgunDepositNote
 import xyz.justzappit.railgun.RailgunDestination
 import xyz.justzappit.railgun.RailgunException
 import xyz.justzappit.railgun.RailgunFees
@@ -164,42 +163,6 @@ class RailgunWalletRepositoryTest {
         }
 
     @Test
-    fun `a deposit note starts the engine if need be, and never syncs`() =
-        runTest {
-            coEvery { session.depositNote() } returns NOTE
-
-            assertEquals(NOTE, repository().depositNote())
-            coVerify(exactly = 1) { wallet.open(any(), any(), any()) }
-            coVerify(exactly = 0) { session.refresh() }
-        }
-
-    @Test
-    fun `a deposit note doesn't wait for a sync under way`() =
-        runTest {
-            val repository = repository()
-            val answer = CompletableDeferred<RailgunRefresh>()
-            coEvery { session.refresh() } coAnswers { answer.await() }
-            coEvery { session.depositNote() } returns NOTE
-
-            val sync = async { repository.sync() }
-            runCurrent()
-
-            assertEquals(NOTE, repository.depositNote())
-            assertFalse(sync.isCompleted)
-            answer.complete(REFRESHED)
-            sync.await()
-        }
-
-    @Test
-    fun `a deposit note to another wallet than the seed's is refused`() =
-        runTest {
-            coEvery { session.depositNote() } returns
-                RailgunDepositNote(OTHER_ADDRESS, NOTE.npk, NOTE.encryptedBundle, NOTE.shieldKey)
-
-            assertFailsWith<IllegalStateException> { repository().depositNote() }
-        }
-
-    @Test
     fun `a sync carries the private sends received, or none when the page couldn't read them`() =
         runTest {
             val repository = repository()
@@ -249,18 +212,6 @@ class RailgunWalletRepositoryTest {
             )
         val FEE: BigInteger = BigInteger.valueOf(250_000)
         val REFRESHED = RailgunRefresh(RailgunBalances(emptyMap()), emptyList())
-        val OTHER_ADDRESS =
-            RailgunAddress(
-                "0zk1qyt5x0c632363rrmd8psxws6n9tscm8gps277gzc0w3s5cg4mdpe9rv7j6fe3z53" +
-                    "luahk4ksjwagt68fl2vguye054rxjyqzvhs9usq4rwrk09al6n0677pdrgn"
-            )
-        val NOTE =
-            RailgunDepositNote(
-                receiver = ADDRESS,
-                npk = ByteArray(RailgunDepositNote.WORD_BYTES) { 0x22 },
-                encryptedBundle = List(RailgunDepositNote.BUNDLE_WORDS) { ByteArray(RailgunDepositNote.WORD_BYTES) },
-                shieldKey = ByteArray(RailgunDepositNote.WORD_BYTES) { 0x66 },
-            )
         val RECEIVED =
             RailgunReceivedSend(
                 txid = TxHash.fromHex("0x" + "cd".repeat(32)),

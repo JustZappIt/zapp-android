@@ -91,6 +91,9 @@ internal class RailgunWebViewHost(
             settings.domStorageEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
+            // The page loads only its own assets, and what it fetches is fixed by its CSP: Safe Browsing would
+            // check those URLs with Google's service, which is a report of the RPC hosts and nothing gained.
+            settings.safeBrowsingEnabled = false
             webChromeClient = Chrome()
         }
 

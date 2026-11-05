@@ -6,6 +6,7 @@ import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.fixture.AccountFixture
+import cash.z.ecc.android.sdk.model.TransactionId
 import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
@@ -24,6 +25,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -204,6 +206,57 @@ class MigrationScheduledVMTest {
             // Still pending — a retry should be able to pick this back up.
             assertNotNull(pendingSchedule.get(testAccountKeyId))
             assertNotNull(pendingPczts.get(testAccountKeyId))
+        }
+
+    @Test
+    fun retryAfterTheSplitWentOutDoesNotSendItAgainAndEverySignatureIsStoredFirst() =
+        runTest {
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts =
+                PendingKeystoneMigrationPcztsRepositoryImpl()
+                    .apply {
+                        set(
+                            testAccountKeyId,
+                            PendingKeystoneMigrationPczts(
+                                requestId = byteArrayOf(1, 2, 3),
+                                splitUnsignedPczt = byteArrayOf(5),
+                                transferUnsignedPczts = listOf(11L to byteArrayOf(9, 9)),
+                                roundIndex = 1,
+                                accumulatedSplitSigned = byteArrayOf(6),
+                                accumulatedTransferSigned = listOf(11L to byteArrayOf(1)),
+                            )
+                        )
+                    }
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { storeSignedNoteSplitPczt(any(), any()) } returns
+                        TransferResult.Success(TransactionId.new(ByteArray(32)))
+                }
+            val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
+            coEvery { finalize(any(), any(), any()) } throws RuntimeException("database is locked")
+            val vm =
+                vm(
+                    pendingSchedule = pendingSchedule,
+                    pendingKeystonePczts = pendingPczts,
+                    getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+                    finalizeMigrationSchedule = finalize,
+                    isMigrationTorEnabledStorageProvider =
+                        mockk { coEvery { get() } returns false },
+                )
+            advanceUntilIdle()
+            coVerifyOrder {
+                sdk.storeSignedSchedulePczts(any())
+                sdk.storeSignedNoteSplitPczt(any(), any())
+            }
+
+            coEvery { finalize(any(), any(), any()) } returns Unit
+            checkNotNull(checkNotNull(vm.failureSheet.value).onRetry).invoke()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { sdk.storeSignedNoteSplitPczt(any(), any()) }
+            assertFalse(vm.isFinalizing.value)
         }
 
     @Test

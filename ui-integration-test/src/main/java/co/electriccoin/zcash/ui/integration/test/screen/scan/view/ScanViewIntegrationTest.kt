@@ -60,7 +60,7 @@ class ScanViewIntegrationTest : UiTestPrerequisites() {
 
         // permission dialog displayed
         Assert.assertNotNull(permissionPositiveButtonUiObject)
-        Assert.assertTrue(permissionPositiveButtonUiObject!!.exists())
+        Assert.assertTrue(permissionPositiveButtonUiObject!!.waitForExists(PERMISSION_DIALOG_TIMEOUT_MILLIS))
 
         restorationTester.emulateSavedInstanceStateRestore()
 

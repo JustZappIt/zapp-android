@@ -18,6 +18,7 @@ class ErrorMapperUseCase(
         title: StringResource? = null,
         message: StringResource? = null,
         primaryStyle: ButtonStyle? = null,
+        isReportable: Boolean = true,
     ) = LceError.BottomSheet(
         ZashiConfirmationState.error(
             title = title ?: stringRes(co.electriccoin.zcash.ui.design.R.string.general_error_title),
@@ -25,12 +26,17 @@ class ErrorMapperUseCase(
             primaryStyle = primaryStyle ?: ButtonStyle.TERTIARY,
             onPrimary = error.restart,
             onBack = error.dismiss,
-            onSecondary = {
-                error.dismiss()
-                scope.launch {
-                    sendEmail(error.cause as? Exception ?: Exception(error.cause.message, error.cause))
-                }
-            },
+            onSecondary =
+                if (isReportable) {
+                    {
+                        error.dismiss()
+                        scope.launch {
+                            sendEmail(error.cause as? Exception ?: Exception(error.cause.message, error.cause))
+                        }
+                    }
+                } else {
+                    null
+                },
         )
     )
 }

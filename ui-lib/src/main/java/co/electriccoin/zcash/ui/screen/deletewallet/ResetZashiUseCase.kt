@@ -4,6 +4,7 @@ import cash.z.ecc.android.sdk.CloseableSynchronizer
 import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
@@ -23,14 +24,33 @@ import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
+import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnfinishedConversionsUseCase
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.preference.AuthMethod
+import co.electriccoin.zcash.ui.preference.getAuthMethod
 import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.internal.closeQuietly
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * The one destructive sequence a wallet leaves this device by: Reset Zapp and the chat's Delete identity both run
+ * it.
+ *
+ * It refuses before touching anything while a gift card's link never left the device or a Shielded USD conversion
+ * is under way, unless the caller passes the user's explicit consent to losing them; then it asks for the app lock,
+ * and only then starts the tail. From its first irreversible step the tail cannot be cancelled, and every step that
+ * waits on a loop, on the engine or on the SDK is bounded: the preferences holding the seed are cleared whatever
+ * came before, because the seed is what matters.
+ */
 class ResetZashiUseCase internal constructor(
     private val walletCoordinator: WalletCoordinator,
     private val flexaRepository: FlexaRepository,
@@ -39,6 +59,7 @@ class ResetZashiUseCase internal constructor(
     private val encryptedPreferenceProvider: EncryptedPreferenceProvider,
     private val homeMessageCacheRepository: HomeMessageCacheRepository,
     private val biometricRepository: BiometricRepository,
+    private val secretAuthGate: SecretAuthGate,
     private val addressBookRepository: AddressBookRepository,
     private val metadataRepository: MetadataRepository,
     private val chatBlockedKeysStorageProvider: ChatBlockedKeysStorageProvider,
@@ -46,6 +67,7 @@ class ResetZashiUseCase internal constructor(
     private val baseBalanceRepository: BaseBalanceRepository,
     private val migrationAppHooks: MigrationAppHooks,
     private val ensureNoUnsharedGiftFunds: EnsureNoUnsharedGiftFundsUseCase,
+    private val ensureNoUnfinishedConversions: EnsureNoUnfinishedConversionsUseCase,
     private val atomicSwapRepository: AtomicSwapRepository,
     private val reverseSwapRepository: ReverseSwapRepository,
     private val railgunWalletRepository: RailgunWalletRepository,
@@ -53,68 +75,126 @@ class ResetZashiUseCase internal constructor(
     private val privateUsdDeposits: PrivateUsdDepositsRepository,
     private val selectedTabRepository: SelectedTabRepository,
 ) {
-    @Suppress("TooGenericExceptionCaught", "ThrowsCount")
+    /** The PIN overlay to render while a wipe waits on a user whose app lock is a PIN. */
+    val pinPrompt: StateFlow<PinVerifyState?> get() = secretAuthGate.pinPrompt
+
+    /**
+     * @param beforeWipe A caller's own teardown, run once the user has authenticated and before the first
+     * irreversible step, so a cancelled prompt leaves it undone.
+     * @throws co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException before anything is touched,
+     * unless [allowGiftDataLoss]. It can come after the prompt too.
+     * @throws co.electriccoin.zcash.ui.common.usecase.UnfinishedConversionsException before anything is touched,
+     * unless [allowConversionLoss]. It can come after the prompt too.
+     */
     suspend operator fun invoke(
         keepFiles: Boolean,
         allowGiftDataLoss: Boolean = false,
-    ) {
-        try {
-            // clearSharedPrefs() wipes gift_cards_v1, and an unshared card's ephemeral seed lives
-            // nowhere else. Refuse before anything is touched.
-            if (!allowGiftDataLoss) ensureNoUnsharedGiftFunds()
-            requestBiometrics()
-            // Migration workers are self-rechaining OneTimeWork — a wallet wipe that leaves them
-            // scheduled produces zombie retries against a wallet that no longer exists (Milan,
-            // 2026-07-30). Cancel while the accounts are still resolvable.
-            migrationAppHooks.cancelMigrationWork()
-            flexaRepository.disconnect()
-            // App-scoped and wallet-specific. Joining before anything is wiped is the point: an
-            // attempt still running would write its checkpoint back into storage this is about to
-            // clear, and would keep driving the deleted wallet's smart account.
-            peerCashOutRepository.reset()
-            baseBalanceRepository.reset()
-            // Conversions too: a loop still running would write the wiped wallet's swap back.
-            atomicSwapRepository.reset()
-            reverseSwapRepository.reset()
-            // Private USD's sends, its deposits, its engine, and the page storage holding the wallet it opened. A
-            // deposit pass still running would write the wiped wallet's deposits back.
-            privateUsdSenders.current?.reset()
-            privateUsdDeposits.reset()
-            railgunWalletRepository.reset()
-            deleteLocalFiles(keepFiles)
-            closeSynchronizer()
-            clearSDK()
-            clearSharedPrefs()
-            clearInMemoryData()
-        } catch (_: BiometricsFailureException) {
-            // do nothing
-        } catch (_: BiometricsCancelledException) {
-            // do nothing
-        }
+        allowConversionLoss: Boolean = false,
+        beforeWipe: suspend () -> Unit = {},
+    ): ResetZashiResult {
+        // clearSharedPrefs() wipes gift_cards_v1, and an unshared card's ephemeral seed lives nowhere else; the
+        // records carrying a conversion to its end live there too. Refuse before anything is touched.
+        refuseWhatWouldBeLost(allowGiftDataLoss, allowConversionLoss)
+        if (!authenticate()) return ResetZashiResult.NOT_AUTHENTICATED
+        // The prompt stays up for as long as the user leaves it, and something may have started behind it.
+        refuseWhatWouldBeLost(allowGiftDataLoss, allowConversionLoss)
+        // A scope cancelled from here on (the screen left, the process trimmed) must not leave half a wallet.
+        val isCleared =
+            withContext(NonCancellable) {
+                bounded("the caller's teardown") { beforeWipe() }
+                wipe(keepFiles)
+            }
+        return if (isCleared) ResetZashiResult.WIPED else ResetZashiResult.SEED_NOT_CLEARED
     }
 
-    private suspend fun requestBiometrics() {
-        biometricRepository.requestBiometrics(
-            BiometricRequest(
-                message =
-                    stringRes(
-                        R.string.authentication_system_ui_subtitle,
-                        stringRes(R.string.authentication_use_case_delete_wallet)
-                    )
-            )
-        )
+    private suspend fun refuseWhatWouldBeLost(
+        allowGiftDataLoss: Boolean,
+        allowConversionLoss: Boolean,
+    ) {
+        if (!allowGiftDataLoss) ensureNoUnsharedGiftFunds()
+        if (!allowConversionLoss) ensureNoUnfinishedConversions()
     }
 
     /**
-     * Waits for a synchronizer to close, bounded by [CLOSE_SYNCHRONIZER_TIMEOUT]. A latched seed
-     * mismatch ([WalletCoordinator.isSeedMismatch]) keeps [SynchronizerProvider.getSynchronizer]'s
-     * underlying flow null forever, which would otherwise hang this step indefinitely after
-     * [deleteLocalFiles] already ran. When no synchronizer materializes in time, this is a no-op —
-     * [clearSDK]'s lockout-aware erase still handles teardown of any lingering SDK state.
+     * True once the user passed the prompt; false when they cancelled it or it failed, which wipes nothing. A PIN is
+     * Zapp's own lock, and the phone may have none of its own to ask for.
+     */
+    private suspend fun authenticate(): Boolean {
+        val message =
+            stringRes(
+                R.string.authentication_system_ui_subtitle,
+                stringRes(R.string.authentication_use_case_delete_wallet)
+            )
+        if (standardPreferenceProvider().getAuthMethod() == AuthMethod.PIN) return secretAuthGate.authenticate(message)
+        return try {
+            biometricRepository.requestBiometrics(BiometricRequest(message = message))
+            true
+        } catch (_: BiometricsFailureException) {
+            false
+        } catch (_: BiometricsCancelledException) {
+            false
+        }
+    }
+
+    /** Whether the preferences holding the seed are gone. */
+    private suspend fun wipe(keepFiles: Boolean): Boolean {
+        // Migration workers are self-rechaining OneTimeWork — a wallet wipe that leaves them
+        // scheduled produces zombie retries against a wallet that no longer exists (Milan,
+        // 2026-07-30). Cancel while the accounts are still resolvable.
+        // It waits for the accounts, which never come without a synchronizer; its tag sweep runs regardless.
+        bounded("the migration work") { migrationAppHooks.cancelMigrationWork() }
+        bounded("Flexa") { flexaRepository.disconnect() }
+        // App-scoped and wallet-specific. Joining before anything is wiped is the point: an
+        // attempt still running would write its checkpoint back into storage this is about to
+        // clear, and would keep driving the deleted wallet's smart account.
+        bounded("the cash-out attempt") { peerCashOutRepository.reset() }
+        bounded("the Base balance") { baseBalanceRepository.reset() }
+        // Conversions too: a loop still running would write the wiped wallet's swap back.
+        bounded("the conversion into USD") { atomicSwapRepository.reset() }
+        bounded("the conversion into ZEC") { reverseSwapRepository.reset() }
+        // Private USD's sends, its deposits, its engine, and the page storage holding the wallet it opened. A
+        // deposit pass still running would write the wiped wallet's deposits back.
+        bounded("Private USD's sends") { privateUsdSenders.current?.reset() }
+        bounded("Private USD's deposits") { privateUsdDeposits.reset() }
+        bounded("the Railgun engine", ENGINE_TIMEOUT) { railgunWalletRepository.reset() }
+        bounded("the local files") { deleteLocalFiles(keepFiles) }
+        bounded("the synchronizer", CLOSE_SYNCHRONIZER_TIMEOUT) { closeSynchronizer() }
+        clearSDK()
+        val isCleared = clearSharedPrefs()
+        clearInMemoryData()
+        return isCleared
+    }
+
+    /**
+     * Runs [step], and stops waiting on it after [timeout], or when it fails, with a log: nothing on the way to the
+     * preferences may hold up the seed's wipe. A loop [step] told to stop stays told; only the wait is given up.
+     *
+     * Only for the tail under [NonCancellable]: a cancellation that reaches here is a step's own, such as a timeout
+     * inside it, never this scope's, so it is a failure of the step like any other.
+     */
+    private suspend fun bounded(
+        what: String,
+        timeout: Duration = STEP_TIMEOUT,
+        loud: Boolean = false,
+        step: suspend () -> Unit,
+    ) {
+        val outcome = runCatching { withTimeoutOrNull(timeout) { step() } }
+        val failure = outcome.exceptionOrNull()
+        if (failure != null) {
+            Twig.error(failure) { "Reset: $what failed; wiping the rest regardless" }
+        } else if (outcome.getOrNull() == null) {
+            val message = { "Reset: $what did not finish within $timeout; wiping the rest regardless" }
+            if (loud) Twig.error(message) else Twig.warn(message)
+        }
+    }
+
+    /**
+     * Waits for a synchronizer and closes it. A latched seed mismatch ([WalletCoordinator.isSeedMismatch]) keeps
+     * [SynchronizerProvider.getSynchronizer]'s underlying flow null forever, so the caller bounds this. When none
+     * materializes in time, [clearSDK]'s lockout-aware erase still handles teardown of any lingering SDK state.
      */
     private suspend fun closeSynchronizer() {
-        withTimeoutOrNull(CLOSE_SYNCHRONIZER_TIMEOUT) { synchronizerProvider.getSynchronizer() }
-            ?.let { (it as CloseableSynchronizer).closeQuietly() }
+        (synchronizerProvider.getSynchronizer() as CloseableSynchronizer).closeQuietly()
     }
 
     private fun deleteLocalFiles(keepFiles: Boolean) {
@@ -124,16 +204,20 @@ class ResetZashiUseCase internal constructor(
         }
     }
 
+    /** The SDK's delete can wait on a database still closing; the preferences are cleared even if it never answers. */
     private suspend fun clearSDK() {
-        walletCoordinator.deleteSdkDataFlow().first()
+        bounded("the SDK's data delete", CLEAR_SDK_TIMEOUT, loud = true) {
+            walletCoordinator.deleteSdkDataFlow().first()
+        }
     }
 
-    private suspend fun clearSharedPrefs() {
-        standardPreferenceProvider().clearPreferences()
-        encryptedPreferenceProvider().clearPreferences()
+    private suspend fun clearSharedPrefs(): Boolean {
+        val isStandardCleared = cleared("standard") { standardPreferenceProvider().clearPreferences() }
+        val isEncryptedCleared = cleared("encrypted") { encryptedPreferenceProvider().clearPreferences() }
         // Outside the provider stack above; without this the deleted wallet's blocklist mirror
         // survives into the next wallet on this device.
         chatBlockedKeysStorageProvider.clear()
+        return isStandardCleared && isEncryptedCleared
     }
 
     private fun clearInMemoryData() {
@@ -144,5 +228,27 @@ class ResetZashiUseCase internal constructor(
 
     companion object {
         private val CLOSE_SYNCHRONIZER_TIMEOUT = 5.seconds
+
+        /** Long enough for a loop mid-request to notice its cancellation, short enough to keep a wipe from hanging. */
+        private val STEP_TIMEOUT = 10.seconds
+
+        /** Its own wait for uses to stop, and then the page's storage to delete. */
+        private val ENGINE_TIMEOUT = 20.seconds
+
+        /** The SDK deletes its databases and cache after the synchronizer let go of them. */
+        private val CLEAR_SDK_TIMEOUT = 30.seconds
     }
+}
+
+/** One store failing to clear doesn't stop the other. */
+private suspend fun cleared(
+    what: String,
+    clear: suspend () -> Boolean,
+): Boolean {
+    val isCleared =
+        runCatching { clear() }
+            .onFailure { Twig.error(it) { "Reset: clearing the $what preferences failed" } }
+            .getOrDefault(false)
+    if (!isCleared) Twig.error { "Reset: the $what preferences weren't cleared" }
+    return isCleared
 }

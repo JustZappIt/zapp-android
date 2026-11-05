@@ -44,7 +44,7 @@ class ScanViewTest : UiTestPrerequisites() {
 
         // permission dialog displayed
         assertNotNull(permissionPositiveButtonUiObject)
-        assertTrue(permissionPositiveButtonUiObject!!.exists())
+        assertTrue(permissionPositiveButtonUiObject!!.waitForExists(PERMISSION_DIALOG_TIMEOUT_MILLIS))
 
         composeTestRule.onNodeWithTag(ScanTag.QR_FRAME).also {
             it.assertDoesNotExist()

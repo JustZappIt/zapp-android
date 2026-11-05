@@ -11,6 +11,10 @@ import androidx.test.uiautomator.UiSelector
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
+// The permission dialog's, not just any button on screen: on a cold emulator that can be the system's "isn't
+// responding" dialog, whose first button closes the hung app and leaves the permission dialog up.
+private const val PERMISSION_DIALOG_PACKAGES = ".*\\.(permissioncontroller|packageinstaller)"
+
 fun getStringResource(
     @StringRes resId: Int
 ) = ApplicationProvider.getApplicationContext<Context>().getString(resId)
@@ -26,6 +30,7 @@ fun getPermissionNegativeButtonUiObject(): UiObject? {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     return UiDevice.getInstance(instrumentation).findObject(
         UiSelector()
+            .packageNameMatches(PERMISSION_DIALOG_PACKAGES)
             .className("android.widget.Button") // $NON-NLS
             .index(
                 // tested up to version 33
@@ -43,6 +48,7 @@ fun getPermissionPositiveButtonUiObject(): UiObject? {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     return UiDevice.getInstance(instrumentation).findObject(
         UiSelector()
+            .packageNameMatches(PERMISSION_DIALOG_PACKAGES)
             .className("android.widget.Button") // $NON-NLS
             .index(
                 // tested up to version 33

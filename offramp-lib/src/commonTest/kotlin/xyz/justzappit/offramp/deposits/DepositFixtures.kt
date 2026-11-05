@@ -111,25 +111,67 @@ internal class FakeKeys : DepositKeyring {
     }
 }
 
-/** New notes, each its own: the words count up from 1. */
+/** Notes as the seed would build them, each kind, address and number its own, counting how many were built. */
 internal class FakeNotes : DepositNotes {
     var made = 0
     var failure: Throwable? = null
 
-    override suspend fun note(): DepositNote {
+    override suspend fun shield(
+        index: Int,
+        validBefore: Long,
+    ): DepositNote = built(FakeNotes.shield(index, validBefore))
+
+    override suspend fun rescue(
+        index: Int,
+        nonce: Long,
+    ): DepositNote = built(FakeNotes.rescue(index, nonce))
+
+    private fun built(note: DepositNote): DepositNote {
         failure?.let { throw it }
         made += 1
-        return note(made)
+        return note
     }
 
     companion object {
-        fun note(seed: Int) =
-            DepositNote(word(seed, 1), List(3) { word(seed, 2 + it) }, word(seed, 5))
+        /** The note address [index]'s shield valid before [validBefore] pays. */
+        fun shield(
+            index: Int,
+            validBefore: Long,
+        ) = note(SHIELD, index, validBefore)
 
+        /** The note address [index]'s rescue with the contract's [nonce] pays. */
+        fun rescue(
+            index: Int,
+            nonce: Long,
+        ) = note(RESCUE, index, nonce)
+
+        private const val SHIELD = 0
+        private const val RESCUE = 1
+
+        private fun note(
+            kind: Int,
+            index: Int,
+            number: Long,
+        ) = DepositNote(
+            word(kind, index, number, 1),
+            List(3) { word(kind, index, number, 2 + it) },
+            word(kind, index, number, 5),
+        )
+
+        // The kind, the address, the number's eight bytes, then the word's place in the note.
         private fun word(
-            seed: Int,
+            kind: Int,
+            index: Int,
+            number: Long,
             part: Int,
-        ) = ByteArray(32) { if (it == 0) seed.toByte() else part.toByte() }
+        ) = ByteArray(32) { at ->
+            when (at) {
+                0 -> kind.toByte()
+                1 -> index.toByte()
+                in 2..9 -> (number shr (8 * (at - 2))).toByte()
+                else -> part.toByte()
+            }
+        }
     }
 }
 

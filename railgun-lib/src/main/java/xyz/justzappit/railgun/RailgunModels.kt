@@ -238,55 +238,6 @@ data class RailgunRelayedProof(
     val spends: List<RailgunNullifiers>,
 )
 
-/**
- * A shield note to [receiver] for zecSwap's Deposits contract to pay, as Railgun's engine built it in the page: [npk],
- * then its ciphertext's three [encryptedBundle] words and [shieldKey], 32 bytes each. The contract shields its own
- * token, and the value its vault holds, to these five words alone, and a deposit's nonce and `note` commit to them.
- *
- * The page opened the note with the wallet's viewing key before giving it out: the random it hides gives [npk] with the
- * wallet's master public key. Neither that random nor the shield key's private half left the page, so a note can't be
- * built again: keep it whole before a deposit that pays it goes out. Never show or log one: [toString] tells nothing.
- */
-class RailgunDepositNote(
-    /** The wallet it pays: the session's own. */
-    val receiver: RailgunAddress,
-    npk: ByteArray,
-    encryptedBundle: List<ByteArray>,
-    shieldKey: ByteArray,
-) {
-    private val words: List<ByteArray> = (listOf(npk) + encryptedBundle + listOf(shieldKey)).map { it.copyOf() }
-
-    init {
-        require(encryptedBundle.size == BUNDLE_WORDS) { "an encrypted bundle is $BUNDLE_WORDS words" }
-        require(words.all { it.size == WORD_BYTES }) { "each of a note's words is $WORD_BYTES bytes" }
-    }
-
-    /** The note's public key, `Poseidon(masterPublicKey, random)`: what's shielded to it only this wallet can spend. */
-    val npk: ByteArray get() = words.first().copyOf()
-
-    /** The random, encrypted to the wallet's viewing key, and the receiver's viewing key, for the shielder. */
-    val encryptedBundle: List<ByteArray> get() = words.subList(1, 1 + BUNDLE_WORDS).map { it.copyOf() }
-
-    /** The public half of the key the bundle is encrypted with. */
-    val shieldKey: ByteArray get() = words.last().copyOf()
-
-    override fun equals(other: Any?): Boolean =
-        other is RailgunDepositNote &&
-            receiver == other.receiver &&
-            words.indices.all { words[it].contentEquals(other.words[it]) }
-
-    override fun hashCode(): Int =
-        words.fold(receiver.hashCode()) { hash, word -> HASH_MULTIPLIER * hash + word.contentHashCode() }
-
-    override fun toString(): String = "RailgunDepositNote"
-
-    companion object {
-        const val WORD_BYTES = 32
-        const val BUNDLE_WORDS = 3
-        private const val HASH_MULTIPLIER = 31
-    }
-}
-
 @Serializable
 enum class RailgunMerkletree {
     @SerialName("utxo")

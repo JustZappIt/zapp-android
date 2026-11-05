@@ -87,7 +87,7 @@ class DepositorTest {
             assertEquals(0, request.validAfter)
             assertEquals(NOW + 3_600, request.validBefore)
             assertEquals(Usdc6.ofMicros(105_000), request.fee)
-            assertEquals(FakeNotes.note(1).wire(), request.note)
+            assertEquals(FakeNotes.shield(0, NOW + 3_600).wire(), request.note)
             val record = pass.records.single()
             assertEquals(DepositState.SENT, record.state)
             assertEquals(listOf(tx(1)), record.transactions)
@@ -106,7 +106,7 @@ class DepositorTest {
             val request = world.relayer.shields.single()
             val nonce =
                 DepositsDomain(SEPOLIA_PIN.chainId, SEPOLIA_PIN.contract)
-                    .depositNonce(FakeNotes.note(1), units(105_000), SEPOLIA_PIN.relayer)
+                    .depositNonce(FakeNotes.shield(4, NOW + 3_600), units(105_000), SEPOLIA_PIN.relayer)
             val from = world.keys.address(4)
             val authorization =
                 ReceiveAuthorization(from, SEPOLIA_PIN.contract, units(5_000_000), 0, NOW + 3_600, nonce)
@@ -549,7 +549,7 @@ class DepositorTest {
             val digest =
                 DepositsDomain(SEPOLIA_PIN.chainId, SEPOLIA_PIN.contract).rescue(
                     world.keys.address(0),
-                    FakeNotes.note(1),
+                    FakeNotes.rescue(0, 2),
                     SEPOLIA_PIN.relayer,
                     units(100_000),
                     2,

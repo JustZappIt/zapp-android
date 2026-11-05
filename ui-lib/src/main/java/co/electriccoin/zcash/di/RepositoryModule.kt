@@ -149,6 +149,7 @@ val repositoryModule =
                 notifier = get(),
                 spendGuard = get(),
                 tokens = get(),
+                upgradePause = get(),
             )
         }
         single<PrivateUsdBalanceRepository> {
@@ -170,6 +171,7 @@ val repositoryModule =
                 deployments = get(),
                 http = get(named(ATOMIC_SWAP_HTTP)),
                 keys = get(),
+                notes = get(),
                 store = get(),
                 railgunWalletRepository = get(),
                 balanceRepository = lazy { get() },

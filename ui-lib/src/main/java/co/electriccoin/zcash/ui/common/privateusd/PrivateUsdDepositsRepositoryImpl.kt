@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import xyz.justzappit.evm.deposits.DepositNote
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.RpcHttpClient
 import xyz.justzappit.evm.types.Address
@@ -220,12 +219,13 @@ private suspend fun RailgunMnemonicProvider.hasWallet(): Boolean =
 
 /**
  * This build's deposits: its deployment's relayer, over [http], which never retries, and its chain, or none where the
- * deployment pins no Deposits contract. Notes come from the wallet's Railgun page, opened with its viewing key there.
+ * deployment pins no Deposits contract. Notes are built from the seed in libzecswap ([PrivateUsdDepositNotes]).
  */
 internal fun privateUsdDeposits(
     deployments: AtomicSwapDeployments,
     http: HttpClient,
     keys: PrivateUsdDepositKeyring,
+    notes: PrivateUsdDepositNotes,
     store: PrivateUsdDepositStore,
     railgunWalletRepository: RailgunWalletRepository,
     balanceRepository: Lazy<PrivateUsdBalanceRepository>,
@@ -240,10 +240,7 @@ internal fun privateUsdDeposits(
             relayer = DepositsClient(http, deployment.swap.relayerUrl),
             chain = DepositsChain(BaseRpcClient(RpcHttpClient.create(), deployment.swap.rpcEndpoint), pin),
             keys = keys,
-            notes = {
-                val note = railgunWalletRepository.depositNote()
-                DepositNote(note.npk, note.encryptedBundle, note.shieldKey)
-            },
+            notes = notes,
             store = store,
             now = { Clock.System.now().epochSeconds },
             // Indices and reasons only: never an address, a note or a signature.

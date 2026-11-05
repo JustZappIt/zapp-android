@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.DeleteChatIdentityUseCase
 import co.electriccoin.zcash.ui.common.usecase.ExportChatSeedPhraseUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveChatIdentityUseCase
+import co.electriccoin.zcash.ui.common.usecase.UnfinishedConversionsException
 import co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException
 import co.electriccoin.zcash.ui.common.usecase.UpdateChatDisplayNameUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -26,7 +27,10 @@ import co.electriccoin.zcash.ui.screen.chat.common.ChatResult
 import co.electriccoin.zcash.ui.screen.chat.common.UsernameRules
 import co.electriccoin.zcash.ui.screen.chat.p2pkey.ChatP2pKeyArgs
 import co.electriccoin.zcash.ui.screen.chat.walletaddress.ChatWalletAddressArgs
+import co.electriccoin.zcash.ui.screen.deletewallet.ResetZashiResult
 import co.electriccoin.zcash.ui.screen.gift.GiftCardListArgs
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
+import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -77,7 +81,9 @@ class ChatProfileVM(
             ) { prompt, edit, input, isSaving, error ->
                 DialogSnapshot(prompt, edit, input, isSaving, error)
             },
-            combine(secretAuthGate.pinPrompt, pendingSeedPhrase) { pin, seed -> pin to seed },
+            combine(secretAuthGate.pinPrompt, deleteChatIdentity.pinPrompt, pendingSeedPhrase) { pin, deletePin, seed ->
+                (pin ?: deletePin) to seed
+            },
         ) { id, copiedValue, dialogs, (pinPrompt, seed) ->
             createState(id, copiedValue, dialogs, pinPrompt, seed)
         }.stateIn(
@@ -141,6 +147,7 @@ class ChatProfileVM(
 
                     DeletePrompt.CONFIRM -> {
                         ChatProfileDeleteDialogState(
+                            kind = ChatProfileDeleteDialogState.Kind.CONFIRM,
                             onConfirm = ::onDeleteConfirm,
                             onDismiss = ::dismissDeleteDialog,
                         )
@@ -148,9 +155,44 @@ class ChatProfileVM(
 
                     DeletePrompt.GIFT_CARDS_BLOCKED -> {
                         ChatProfileDeleteDialogState(
+                            kind = ChatProfileDeleteDialogState.Kind.GIFT_CARDS_BLOCKED,
                             onConfirm = ::onReviewGiftCards,
                             onDismiss = ::dismissDeleteDialog,
-                            isBlockedByGiftCards = true,
+                        )
+                    }
+
+                    DeletePrompt.CONVERSIONS_BLOCKED -> {
+                        ChatProfileDeleteDialogState(
+                            kind = ChatProfileDeleteDialogState.Kind.CONVERSIONS_BLOCKED,
+                            onConfirm = ::onReviewConversions,
+                            onDismiss = ::dismissDeleteDialog,
+                            onDeleteAnyway = ::onDeleteDespiteConversions,
+                        )
+                    }
+
+                    DeletePrompt.CONVERSIONS_UNREADABLE -> {
+                        ChatProfileDeleteDialogState(
+                            kind = ChatProfileDeleteDialogState.Kind.CONVERSIONS_UNREADABLE,
+                            onConfirm = ::onDeleteConfirm,
+                            onDismiss = ::dismissDeleteDialog,
+                            onDeleteAnyway = ::onDeleteDespiteConversions,
+                        )
+                    }
+
+                    DeletePrompt.REFUND_TO_RECOVER -> {
+                        ChatProfileDeleteDialogState(
+                            kind = ChatProfileDeleteDialogState.Kind.REFUND_TO_RECOVER,
+                            onConfirm = ::onReviewRefunds,
+                            onDismiss = ::dismissDeleteDialog,
+                            onDeleteAnyway = ::onDeleteDespiteConversions,
+                        )
+                    }
+
+                    DeletePrompt.FAILED -> {
+                        ChatProfileDeleteDialogState(
+                            kind = ChatProfileDeleteDialogState.Kind.FAILED,
+                            onConfirm = ::onDeleteConfirm,
+                            onDismiss = ::dismissDeleteDialog,
                         )
                     }
                 },
@@ -213,7 +255,12 @@ class ChatProfileVM(
 
     private fun onDeleteConfirm() {
         deletePrompt.value = DeletePrompt.NONE
-        viewModelScope.launch { performDeleteIdentity() }
+        viewModelScope.launch { performDeleteIdentity(allowConversionLoss = false) }
+    }
+
+    private fun onDeleteDespiteConversions() {
+        deletePrompt.value = DeletePrompt.NONE
+        viewModelScope.launch { performDeleteIdentity(allowConversionLoss = true) }
     }
 
     private fun onReviewGiftCards() {
@@ -221,13 +268,41 @@ class ChatProfileVM(
         navigationRouter.forward(GiftCardListArgs)
     }
 
-    private suspend fun performDeleteIdentity() {
-        try {
-            deleteChatIdentity()
-        } catch (_: UnsharedGiftFundsException) {
-            deletePrompt.value = DeletePrompt.GIFT_CARDS_BLOCKED
-            return
+    private fun onReviewConversions() {
+        deletePrompt.value = DeletePrompt.NONE
+        navigationRouter.forward(PrivateUsdArgs)
+    }
+
+    private fun onReviewRefunds() {
+        deletePrompt.value = DeletePrompt.NONE
+        navigationRouter.forward(PrivateUsdRefundsArgs)
+    }
+
+    private suspend fun performDeleteIdentity(allowConversionLoss: Boolean) {
+        val result =
+            try {
+                deleteChatIdentity(allowConversionLoss = allowConversionLoss)
+            } catch (_: UnsharedGiftFundsException) {
+                deletePrompt.value = DeletePrompt.GIFT_CARDS_BLOCKED
+                null
+            } catch (blocked: UnfinishedConversionsException) {
+                deletePrompt.value =
+                    when {
+                        blocked.count == null -> DeletePrompt.CONVERSIONS_UNREADABLE
+                        blocked.hasRefund -> DeletePrompt.REFUND_TO_RECOVER
+                        else -> DeletePrompt.CONVERSIONS_BLOCKED
+                    }
+                null
+            }
+        // A refused delete, or a cancelled or failed prompt, wiped nothing: the identity and the process both stay.
+        when (result) {
+            ResetZashiResult.WIPED -> relaunch()
+            ResetZashiResult.SEED_NOT_CLEARED -> deletePrompt.value = DeletePrompt.FAILED
+            ResetZashiResult.NOT_AUTHENTICATED, null -> Unit
         }
+    }
+
+    private fun relaunch() {
         application.packageManager.getLaunchIntentForPackage(application.packageName)?.let { intent ->
             intent.addFlags(
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -267,8 +342,19 @@ class ChatProfileVM(
         val publicKey: String
     )
 
-    /** [GIFT_CARDS_BLOCKED] is a refusal, not a confirmation: its primary action reviews the cards. */
-    private enum class DeletePrompt { NONE, CONFIRM, GIFT_CARDS_BLOCKED }
+    /**
+     * All but [CONFIRM] are refusals or a failure, not confirmations: their primary action reviews what blocks, or
+     * tries again; only the Shielded USD ones can be overridden, and lose what's in it.
+     */
+    private enum class DeletePrompt {
+        NONE,
+        CONFIRM,
+        GIFT_CARDS_BLOCKED,
+        CONVERSIONS_BLOCKED,
+        CONVERSIONS_UNREADABLE,
+        REFUND_TO_RECOVER,
+        FAILED,
+    }
 
     private data class DialogSnapshot(
         val deletePrompt: DeletePrompt,
