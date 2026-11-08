@@ -30,7 +30,7 @@ env:
   # with .zapp-deps; verify_composite_build fails when the two disagree.
   ZAPP_MESSAGING_REF: 58f3cc72792d5efe663ebb4fd397f845dfcec2ac
   BARE_KIT_REF: 15a3569f3d704de7151761051c8d9cc2e299414f
-  ZECSWAP_REF: 8a5c642571ec730dcf0b0c2359484c2c71ae341d
+  ZECSWAP_REF: 64917fc90175dc25a0f6d522f0481807d7fe78f2
 
 jobs:
   validate_gradle_wrapper:
@@ -189,7 +189,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: JustZappIt/zecSwap
+          repository: ChinmayGopal931/zecSwap
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
@@ -341,7 +341,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: JustZappIt/zecSwap
+          repository: ChinmayGopal931/zecSwap
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
@@ -473,7 +473,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: JustZappIt/zecSwap
+          repository: ChinmayGopal931/zecSwap
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
@@ -602,7 +602,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: JustZappIt/zecSwap
+          repository: ChinmayGopal931/zecSwap
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
@@ -694,7 +694,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: JustZappIt/zecSwap
+          repository: ChinmayGopal931/zecSwap
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
@@ -791,7 +791,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: JustZappIt/zecSwap
+          repository: ChinmayGopal931/zecSwap
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
@@ -912,7 +912,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: JustZappIt/zecSwap
+          repository: ChinmayGopal931/zecSwap
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
@@ -1123,7 +1123,7 @@ jobs:
         timeout-minutes: 5
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          repository: JustZappIt/zecSwap
+          repository: ChinmayGopal931/zecSwap
           ref: ${{ env.ZECSWAP_REF }}
           persist-credentials: false
           path: zecSwap
