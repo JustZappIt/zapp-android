@@ -882,6 +882,8 @@ jobs:
         with:
           name: Binaries-${{ github.run_attempt }}-${{ matrix.name }}
           path: ~/artifacts
+          # Only read by the build job's merge step in this run; a re-run uploads new parts.
+          retention-days: 1
 
   build_foss:
     needs: [validate_gradle_wrapper]
@@ -1010,6 +1012,8 @@ jobs:
         with:
           name: Binaries-${{ github.run_attempt }}-foss
           path: ~/artifacts
+          # Only read by the build job's merge step in this run; a re-run uploads new parts.
+          retention-days: 1
 
   build:
     if: ${{ always() }}
@@ -1089,6 +1093,8 @@ jobs:
         with:
           name: Binaries
           path: ~/artifacts
+          # Long enough to install a PR's APK; logs and reports keep the repository default.
+          retention-days: 7
 
   # Performs a button mash test on the release build of the app
   test_robo_release:
